@@ -1,0 +1,193 @@
+cmake_minimum_required(VERSION 3.22)
+project(rmcs_auto_aim_v2_tools)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(RMCS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+set(RMCS_SRC_DIR "${RMCS_SOURCE_DIR}/src")
+
+find_package(rclcpp REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(OpenVINO REQUIRED)
+
+find_package(OpenCV 4 REQUIRED)
+
+include_directories(
+    ${RMCS_SRC_DIR}
+    ${rclcpp_INCLUDE_DIRS}
+    ${visualization_msgs_INCLUDE_DIRS}
+    ${geometry_msgs_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
+)
+
+set(TOOL_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(
+    tool_terminal
+    ${TOOL_DIR}/util/terminal.cpp
+    ${TOOL_DIR}/util/snapshot.cpp
+)
+target_include_directories(
+    tool_terminal
+    PUBLIC
+    ${TOOL_DIR}
+)
+
+# Visualization
+add_executable(
+    visualization
+    ${TOOL_DIR}/visualization.cpp
+    ${RMCS_SRC_DIR}/utility/rclcpp/visual/armor.cpp
+    ${RMCS_SRC_DIR}/utility/rclcpp/visual/posture.cpp
+    ${RMCS_SRC_DIR}/utility/panic.cpp
+    ${RMCS_SRC_DIR}/utility/math/solve_armors.cpp
+    ${RMCS_SRC_DIR}/utility/rclcpp/node.cpp
+)
+target_link_libraries(
+    visualization
+    rclcpp::rclcpp
+    ${visualization_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+)
+
+add_executable(
+    see_outpost
+    ${TOOL_DIR}/see_outpost.cpp
+    ${RMCS_SRC_DIR}/utility/math/outpost.cpp
+    ${RMCS_SRC_DIR}/utility/rclcpp/visual/armor.cpp
+    ${RMCS_SRC_DIR}/utility/panic.cpp
+    ${RMCS_SRC_DIR}/utility/rclcpp/node.cpp
+)
+target_link_libraries(
+    see_outpost
+    rclcpp::rclcpp
+    ${visualization_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+)
+
+add_executable(
+    test_outpost_ekf
+    ${TOOL_DIR}/test_outpost_ekf.cpp
+    ${RMCS_SRC_DIR}/module/tracker/model/outpost.cpp
+    ${RMCS_SRC_DIR}/utility/math/outpost.cpp
+    ${RMCS_SRC_DIR}/utility/panic.cpp
+    ${RMCS_SRC_DIR}/utility/rclcpp/node.cpp
+)
+target_link_libraries(
+    test_outpost_ekf
+    rclcpp::rclcpp
+    ${visualization_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+)
+
+add_executable(
+    test_robot_ekf
+    ${TOOL_DIR}/test_robot_ekf.cpp
+    ${RMCS_SRC_DIR}/module/tracker/model/robot.cpp
+    ${RMCS_SRC_DIR}/utility/math/robot.cpp
+    ${RMCS_SRC_DIR}/utility/math/reprojection.cpp
+    ${RMCS_SRC_DIR}/utility/math/camera.cpp
+    ${RMCS_SRC_DIR}/utility/math/solve_pnp/pnp_solution.cpp
+    ${RMCS_SRC_DIR}/utility/panic.cpp
+    ${RMCS_SRC_DIR}/utility/rclcpp/node.cpp
+)
+target_link_libraries(
+    test_robot_ekf
+    rclcpp::rclcpp
+    ${visualization_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${sensor_msgs_LIBRARIES}
+    ${OpenCV_LIBS}
+)
+
+add_executable(
+    test_rune_ekf
+    ${TOOL_DIR}/test_rune_ekf.cpp
+    ${RMCS_SRC_DIR}/module/tracker/model/rune.cpp
+    ${RMCS_SRC_DIR}/utility/math/solve_pnp/pnp_solution.cpp
+    ${RMCS_SRC_DIR}/utility/math/reprojection.cpp
+    ${RMCS_SRC_DIR}/utility/math/camera.cpp
+    ${RMCS_SRC_DIR}/utility/panic.cpp
+)
+target_link_libraries(
+    test_rune_ekf
+    rclcpp::rclcpp
+    ${visualization_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${OpenCV_LIBS}
+)
+
+add_executable(
+    ov-model-status
+    ${TOOL_DIR}/ov_model_status.cpp
+)
+target_link_libraries(
+    ov-model-status
+    openvino::runtime
+)
+
+#
+# Need Hikcamera
+#
+
+find_package(hikcamera QUIET)
+
+set(HIKCAMERA_AVAILABLE OFF)
+if(hikcamera_FOUND)
+    set(HIKCAMERA_AVAILABLE ON)
+elseif(DEFINED hikcamera_LIBRARIES)
+    set(HIKCAMERA_AVAILABLE ON)
+endif()
+
+if(HIKCAMERA_AVAILABLE)
+    include_directories(
+        ${hikcamera_INCLUDE_DIRS}
+    )
+
+    # Hikcamera
+    add_executable(
+        hikcamera
+        ${TOOL_DIR}/hikcamera.cpp
+        ${RMCS_SRC_DIR}/utility/image/recorder.cpp
+        ${RMCS_SRC_DIR}/utility/singleton/running.cpp
+        ${RMCS_SRC_DIR}/module/debug/visualization/stream_session.cpp
+        ${RMCS_SRC_DIR}/module/debug/visualization/stream_context.cpp
+    )
+    target_link_libraries(
+        hikcamera
+        tool_terminal
+        ${OpenCV_LIBS}
+        ${hikcamera_LIBRARIES}
+        rclcpp::rclcpp
+    )
+
+    # Hikcamera Test
+    add_executable(
+        hikcamera_test
+        ${TOOL_DIR}/hikcamera_test.cpp
+    )
+    target_link_libraries(
+        hikcamera_test
+        ${OpenCV_LIBS}
+        ${hikcamera_LIBRARIES}
+    )
+
+    # Rotation Estimator
+    add_executable(
+        rotation_estimator
+        ${TOOL_DIR}/rotation_estimator.cpp
+        ${RMCS_SRC_DIR}/module/perception/rotation_estimator.cpp
+    )
+    target_link_libraries(
+        rotation_estimator
+        rclcpp::rclcpp
+        ${geometry_msgs_LIBRARIES}
+        ${OpenCV_LIBS}
+        ${hikcamera_LIBRARIES}
+    )
+else()
+    message(STATUS "hikcamera 未检测到，跳过相关构建")
+endif()

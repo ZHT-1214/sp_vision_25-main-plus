@@ -1,0 +1,15 @@
+namespace foxglove;
+
+table VisionData {
+    mode: uint8;
+
+    yaw: float;
+    pitch: float;
+
+    is_find_target: uint8;
+    back_is_find_target: uint8;
+    fire_cnt: uint8;
+    timing: uint16;
+}
+
+root_type VisionData;

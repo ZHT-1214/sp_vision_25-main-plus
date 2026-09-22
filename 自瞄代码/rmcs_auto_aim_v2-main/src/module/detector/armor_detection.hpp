@@ -1,0 +1,22 @@
+#pragma once
+
+#include "utility/pimpl.hpp"
+#include "utility/robot/armor.hpp"
+
+#include <expected>
+
+#include <opencv2/core/mat.hpp>
+#include <opencv2/core/types.hpp>
+#include <yaml-cpp/yaml.h>
+
+namespace rmcs::detector {
+
+class ArmorDetection {
+    RMCS_PIMPL_DEFINITION(ArmorDetection)
+
+public:
+    auto initialize(const YAML::Node&) noexcept -> std::expected<void, std::string>;
+    auto sync_detect(const cv::Mat&) noexcept -> std::vector<Armor2d>;
+};
+
+}

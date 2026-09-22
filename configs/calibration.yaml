@@ -1,0 +1,31 @@
+#内角点数量：12+1
+#内角点数量：9+1
+#center_distance_mm: 40
+pattern_cols: 11
+pattern_rows: 8
+square_size: 30  # 棋盘格每个格子的边长(mm)
+
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
+
+# camera_name: "hikrobot"
+# exposure_ms: 3
+# gain: 10.0
+# vid_pid: "2bdf:0001"
+camera_name: "mindvision"
+exposure_ms: 20
+gamma: 0.5
+vid_pid: "f622:d13a"
+
+#####-----cboard参数-----#####
+quaternion_canid: 0x01
+bullet_speed_canid: 0x110
+send_canid: 0xff
+can_interface: "can0"
+
+com_port: "/dev/ttyACM0"
+# com_port: "/dev/ttyACM1"
+
+yaw_kp: 0
+yaw_kd: 0
+pitch_kp: 0
+pitch_kd: 0

@@ -1,0 +1,8 @@
+add_subdirectory(config_loader)
+add_subdirectory(foxglove)
+add_subdirectory(time)
+add_subdirectory(threads)
+add_subdirectory(transform_tools)
+add_subdirectory(foxglove_viz)
+add_subdirectory(img_viz)
+add_subdirectory(logger)

@@ -1,0 +1,166 @@
+log_level: Info
+plot_info: true
+always_on_task: true
+show_image: true
+save_image: false
+erase_if_not_key_frame: true
+tf_query_tolerance_ms: 200.0
+camera_name: camera0
+camera_frame_id: camera
+odom_frame_id: odom
+armors_sub_topic:
+  service: armors
+  instance: fake_ap
+  # instance: detector
+  event: data
+serial_topic:
+  service: aim_command
+  instance: tracker
+  event: data
+robot_conf:
+  first_update_batch_size: 1
+  armor_match_conf:
+    max_match_yaw_diff_degree: 40.0
+    max_match_distance_m: 1.0
+    max_match_mahalanobis_distance: 50.0
+    ypd_conf:
+      yaw_pitch_noise: 4e-3
+      basic_distance_noise: 1.0
+      distance_noise_log_scale: 1.0
+      basic_armor_yaw_noise: 9e-2
+      armor_yaw_log_divisor: 200.0
+  nis_conf:
+    nis_failure_window_size: 100
+    nis_failure_thres: 9.5
+    reset_failure_percentage_thres: 15
+  lost_threshold_sec: 0.3
+  huge_vyaw_reset_thres: 50
+  yaw_prior_noise: 9.0
+  vyaw_prior_noise: 9.0
+  translation_prior_noise:
+    x: 0.1
+    y: 0.1
+    z: 0.1
+  velocity_prior_noise:
+    x: 0.5
+    y: 0.5
+    z: 0.5
+  yaw_factor_noise: 0.005
+  vyaw_factor_noise: 0.05
+  translation_factor_noise:
+    x: 0.001
+    y: 0.001
+    z: 0.001
+  velocity_factor_noise:
+    x: 0.01
+    y: 0.01
+    z: 0.01
+  radius_prior_noise: 0.005
+  radius_min: 0.15
+  default_radius: 0.26
+  radius_max: 0.5
+  dz_prior_noise: 0.05
+  default_dz: 0.0
+  armor_observation_noise:
+    pixel_error:
+      x: 1.0
+      y: 1.0
+    tangential_error_m: 0.01
+    radial_error_m: 0.03
+    height_error_m: 0.01
+    yaw_error_rad: 0.005
+
+outpost_conf:
+  first_update_batch_size: 1
+  armor_match_conf:
+    max_match_yaw_diff_degree: 45.0
+    max_match_distance_m: 1.5
+    max_match_mahalanobis_distance: 15.0
+    ypd_conf:
+      yaw_pitch_noise: 4e-3
+      basic_distance_noise: 1.0
+      distance_noise_log_scale: 1.0
+      basic_armor_yaw_noise: 9e-2
+      armor_yaw_log_divisor: 200.0
+  nis_conf:
+    nis_failure_window_size: 100
+    nis_failure_thres: 9.5
+    reset_failure_percentage_thres: 40
+  lost_threshold_sec: 0.8
+  huge_vyaw_reset_thres: 50
+  yaw_prior_noise: 9.0
+  vyaw_prior_noise: 9.0
+  translation_prior_noise:
+    x: 0.1
+    y: 0.1
+    z: 0.0001
+  velocity_prior_noise:
+    x: 0.01
+    y: 0.01
+    z: 0.01
+  yaw_factor_noise: 0.05
+  vyaw_factor_noise: 0.1
+  translation_factor_noise:
+    x: 0.05
+    y: 0.05
+    z: 0.05
+  velocity_factor_noise:
+    x: 0.05
+    y: 0.05
+    z: 0.05
+  radius_prior_noise: 0.001
+  radius_min: 0.15
+  default_radius: 0.23
+  radius_max: 0.5
+  dz_prior_noise: 0.5
+  armor_observation_noise:
+    pixel_error:
+      x: 2.0
+      y: 2.0
+    tangential_error_m: 0.01
+    radial_error_m: 0.03
+    height_error_m: 0.005
+    yaw_error_rad: 0.01
+aim_target_change_count: 10
+planner_conf:
+  dt_sec: 0.01
+  fail_polling_interval_sec: 0.1
+  trajectory_half_horizon: 50
+  rk45_yaw0: false
+  iterative_yaw0: true
+  rk45_traj: false
+  iterative_traj: false
+  shoot_offset: 0
+  yaw_offset: 0.0
+  pitch_offset: 0.0
+  predict_offset_ms: 73
+  max_yaw_acc: 50.0
+  Q_yaw: [9e6, 0]
+  R_yaw: 1
+  max_pitch_acc: 100.0
+  Q_pitch: [9e6,0]
+  R_pitch: 1
+  max_bullet_speed: 25.0
+  default_bullet_speed: 22.0
+  min_bullet_speed: 10.0
+  trajectory_conf:
+    ballistic_conf:
+      g: 9.8
+      k: 0.019
+      barrel_length: 0.107
+      time_step: 0.001
+      max_fly_time: 0.8
+      max_pitch_iterate_count: 80
+      min_pitch_error_m: 0.01
+      gimbal_pitch_max_degree: 30.0
+      gimbal_pitch_min_degree: -10.0
+    max_aim_iterate_count: 100
+    aim_ok_error_m: 0.01
+    armor_switch_facing_degree_diff_thres: 5.0
+    iterative_max_facing_degree: 70.0
+    flytime0_distance_offset: -0.3
+  fire_ctrl_conf:
+    norm_dispersion_yaw_degree: 0.5
+    norm_dispersion_pitch_degree: 0.5
+    min_fire_thres_yaw_degree: 0.1
+    min_fire_thres_pitch_degree: 0.1

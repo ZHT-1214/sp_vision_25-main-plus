@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>崇实战队自瞄系统网页调试器</title>
+    <link rel="icon" href="{{ url_for('static', filename='崇实战队logo图标.png') }}" type="image/png" />
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css', v='20260705a') }}" as="style" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260705a') }}" />
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="{{ url_for('static', filename='js/chart_logic.js', v='20260609d') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/json_view.js', v='20260609d') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/main.js', v='20260705a') }}"></script>
+  </head>
+
+  <body>
+    <header id="header">
+      <img src="{{ url_for('static', filename='logo.JPG') }}" alt="崇实战队" width="52" height="52" />
+      <div class="header-copy">
+        <h1>崇实战队自瞄系统网页调试器</h1>
+        <p>{{ server_url }}</p>
+      </div>
+      <div class="header-status">
+        <span id="data-status" class="status-pill">DATA</span>
+        <span id="log-status" class="status-pill">LOG</span>
+      </div>
+    </header>
+
+    <main id="video-tab">
+      <section id="main-grid" aria-label="调试面板">
+        <article class="panel" id="video-panel">
+          <div class="panel-title">
+            <h2>视频流</h2>
+            <button class="icon-btn fullscreen-btn" type="button" id="fullscreenBtn" title="全屏">⛶</button>
+          </div>
+          <div class="video-container">
+            <img src="{{ url_for('video_feed') }}" alt="视频流" id="video-stream" decoding="async" />
+          </div>
+        </article>
+
+        <article class="panel" id="json-info">
+          <div class="panel-title">
+            <h2>Log</h2>
+          </div>
+          <div class="json-container" id="json-log-container">
+            <div id="json-log"></div>
+          </div>
+        </article>
+
+        <article class="panel" id="main-chart-panel">
+          <div class="panel-title">
+            <h2>主图</h2>
+            <label class="toggle-line">
+              <input type="checkbox" id="multiLineChart" checked />
+              <span>总图</span>
+            </label>
+          </div>
+
+          <div class="chart-toolbar">
+            <div class="chart-select-controls" id="chartSelectControls">
+              <label><input type="checkbox" data-key="yaw" checked /> Yaw</label>
+              <label><input type="checkbox" data-key="pitch" checked /> Pitch</label>
+              <label><input type="checkbox" data-key="target_yaw" /> Target Yaw</label>
+              <label><input type="checkbox" data-key="target_pitch" /> Target Pitch</label>
+              <label><input type="checkbox" data-key="gimbal_yaw" checked /> Gimbal Yaw</label>
+              <label><input type="checkbox" data-key="gimbal_pitch" checked /> Gimbal Pitch</label>
+              <label><input type="checkbox" data-key="control_v_yaw" /> Control V Yaw</label>
+              <label><input type="checkbox" data-key="control_v_pitch" /> Control V Pitch</label>
+              <label><input type="checkbox" data-key="control_a_yaw" /> Control A Yaw</label>
+              <label><input type="checkbox" data-key="control_a_pitch" /> Control A Pitch</label>
+              <label><input type="checkbox" data-key="fly_time" /> Fly Time</label>
+              <label><input type="checkbox" data-key="target_v_yaw" /> Target V Yaw</label>
+              <label><input type="checkbox" data-key="target_v_roll" /> Target V Roll</label>
+              <label><input type="checkbox" data-key="rune_a_diff" /> Rune A Diff</label>
+              <label><input type="checkbox" data-key="rune_w_diff" /> Rune W Diff</label>
+              <label><input type="checkbox" data-key="yaw_diff" /> Yaw Diff</label>
+              <label><input type="checkbox" data-key="pitch_diff" /> Pitch Diff</label>
+              <label><input type="checkbox" data-key="enable_yaw_diff" /> Enable Yaw Diff</label>
+              <label><input type="checkbox" data-key="enable_pitch_diff" /> Enable Pitch Diff</label>
+            </div>
+
+            <div class="range-row">
+              <label for="mainMaxPts">最大点数</label>
+              <input type="number" id="mainMaxPts" value="100" min="10" max="1000" step="10" />
+              <button type="button" id="applyMainRange">应用</button>
+            </div>
+          </div>
+
+          <div class="main-chart-wrap">
+            <canvas id="mainChart"></canvas>
+          </div>
+        </article>
+
+        <article class="panel" id="individual-chart-panel">
+          <div class="panel-title">
+            <h2>独立图表</h2>
+          </div>
+          <div id="individualCharts"></div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,149 @@
+# 自瞄 RMCS 配置参考
+
+rmcs_executor:
+  ros__parameters:
+    update_rate: 1000.0
+    components:
+      # - rmcs::AutoAimCapturerComponent -> capturer_main
+      # - rmcs::AutoAimCapturerComponent -> capturer_aux
+      # - rmcs::AutoAimRecorderComponent -> auto_aim_recorder
+
+      # - rmcs::AutoAimPlayerComponent -> auto_aim_player
+      # - rmcs::AutoAimVideoPlayerComponent -> auto_aim_video_player
+
+      - rmcs::AutoAimComponent -> auto_aim_component
+
+capturer_main:
+  ros__parameters:
+    # 相机设备名，空字符串表示自动选择第一台可用相机
+    camera_name: ""
+    # 曝光时间，单位微秒
+    exposure_us: 2000.0
+    # 模拟增益
+    gain: 16.9807
+    # 采集帧率
+    framerate: 249.1
+    # 是否垂直翻转图像
+    invert_image: false
+    # RLS 同步模型的时间常数，单位秒，用于估计触发信号与帧到达时刻的延迟
+    rls_tau_sec: 10.0
+    # 是否使用硬件同步（exposure_signal + RLS 线性同步模型）
+    # 关闭后将退化为自由采集模式
+    use_hardware_sync: true
+    # 自由采集模式下，图像与 imu 姿态间的时间差，单位毫秒
+    # 以帧接收时刻为基准向前回退该时长取 imu 快照
+    delay_ms: 0.0
+    # 输出帧 topic
+    frame_topic: "/gimbal/auto_aim/camera_frame"
+    # 硬同步触发输入，use_hardware_sync: true 时不可为空
+    exposure_signal_topic: "/gimbal/auto_aim/exposure_signal"
+    # IMU 快照输入；空字符串时姿态为 Identity、角速度为 Zero
+    imu_snapshot_topic: "/gimbal/auto_aim/imu_snapshot"
+
+auto_aim_recorder:
+  ros__parameters:
+    # 录制文件输出目录
+    output_path: "/tmp/autoaim/records"
+    # 帧队列深度
+    queue_depth: 16
+    # 每累计多少帧执行一次磁盘刷新
+    flush_every_n_frames: 64
+    # 单次录制最大时长，单位秒；0 表示不限制
+    max_duration_seconds: 0
+    # 录制文件总大小上限，单位 GB；0 表示不限制
+    max_videos_size_gb: 0.0
+    # 自动录制开关标志
+    # 开启时 /auto_aim/should_shoot 为真即开始录制，每次为真刷新 2 秒心跳窗口，
+    # 超过 2 秒未再为真则停止录制；开启时手动 recorder.start/stop 将被心跳覆盖
+    auto_record: false
+
+auto_aim_player:
+  ros__parameters:
+    # 录制数据目录路径，通常为 AutoAimRecorderComponent 输出的文件夹
+    input_path: "/path/to/<name>"
+    # 是否循环播放
+    loop_play: false
+    # 播放暂停帧率，控制帧间间隔
+    pause_fps: 30.0
+
+auto_aim_video_player:
+  ros__parameters:
+    # 输入视频文件路径
+    input_path: "/path/to/<name>.avi"
+    # 播放帧率
+    framerate: 40.0
+    # 是否循环播放
+    loop_play: true
+
+auto_aim_component:
+  ros__parameters:
+    # WARN: 危险！可选 red | blue，生效后裁判系统 ID 缺席时
+    # 将强行绑定为对应阵营哨兵，仅供调试，严禁比赛启用。
+    # 留空或填 unknow 表示禁用。
+    dangerous_fallback: ""
+
+    # 手动开火开关标志
+    # 开启时的开火条件：自瞄允许开火且有开火意图（左键/左拨杆DOWN）
+    # 关闭时的开火条件：自瞄允许开火（无需开火意图）
+    manual_shoot: false
+
+    # 能量机关模式开关标志
+    # 开启时响应右拨杆 UP->MIDDLE / F 键切换能量机关跟踪
+    # 关闭时忽略切换事件，始终不跟踪能量机关
+    enable_rune: true
+
+    # 启动时默认的能量机关跟踪状态，enable_rune 关闭时始终不跟踪
+    default_attack_rune: false
+
+    # 跟踪目标兵种白名单，缺省默认 FULL（全部兵种）
+    # 可选：HERO / ENGINEER / INFANTRY_3 / INFANTRY_4 / SENTRY / OUTPOST / BASE
+    # 特殊值：FULL（全部）
+    track_ids: [FULL]
+
+    # 相机在 PitchLink 下的平移外参（米），仅平移，装配不引入旋转
+    # 注意，PitchLink 是整个 Pitch 的旋转点
+    camera_translation: [0.0, 0.0, 0.0]
+
+    fire_control:
+      bullet_speed: 22.5 # m/s
+
+      # 发弹延迟，这将会影响预测量，具体调参时，可以击打小陀螺中的
+      # 靶车，用慢动作拍摄弹道（人眼是看不清的），看弹丸击打点在目
+      # 标装甲板的前面还是后面，如果子弹跟不上装甲板，就将该值调大
+      # 一点，预测器会往前多预测一点，如果子弹超过了旋转的装甲板，
+      # 那就调小一点
+      shoot_delay: 0.04 # s
+
+      # 如想要向左调整弹道，增加 offset_yaw
+      offset_yaw: 0.0 # degree
+      # 如想要向下调整弹道，增加 offset_pitch
+      offset_pitch: 0.0 # degree
+
+      # 射击窗口，以目标车中心方向为基准，击打装甲板的 Yaw 为判断
+      # 依据，正对着时的 Yaw 为 0 度，左右倾斜 attack_window / 2，
+      # 超过此阈值则不被认为可以射击
+      attack_window: 120.0 # degree (total window)
+
+      # rad/s，目标角速度超过则退化为云台静止，瞄准旋转中心，按装
+      # 甲板是否与射线相交来判断是否发弹
+      degraded_angle_speed: 12.0
+
+      # 最佳射击窗口冗余系数，云台最大速度/加速度乘以该系数后再
+      # 计算可稳定跟踪的射击窗口，0.8 表示按 80% 能力留出冗余
+      window_redundancy: 0.8
+
+      # 预瞄优化，会动态根据云台的最大角加速度和最大角速度计算出能
+      # 跟上的极限窗口，当装甲板处于射击窗口，但是超出了该极限窗口，
+      # 便会停止跟踪该装甲板，提前到另一个窗口边界等待下一个装甲板
+      attack_preaim: true
+
+      # 选板窗口滞回比例（施密特）：进入 (1-h)、退出 (1+h)
+      window_hysteresis: 0.2
+
+      yaw_tolerance: 0.07 # m，横向单边容差（≤5m 时精确，超过后按 5m 等效角宽）
+      pitch_tolerance: 0.04 # m，纵向单边容差（同上）
+
+      # 能量机关攻击节奏（秒）：idle 为抑制发射的时序空闲期，
+      # shoot 为允许发射窗口，二者交替循环
+      rune_idle_duration: 0.4 # s
+      rune_shoot_duration: 0.2 # s

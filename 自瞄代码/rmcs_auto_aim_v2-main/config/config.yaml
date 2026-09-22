@@ -1,0 +1,88 @@
+use_visualization: true
+
+camera_matrix:
+  [
+    1.722231837421459e+03,
+    0.,
+    7.013056440882832e+02,
+    0.,
+    1.724876404292754e+03,
+    5.645821718351237e+02,
+    0.,
+    0.,
+    1.,
+  ]
+distort_coeff: [-0.064232403853946, -0.087667493884102, 0, 0, 0.792381808294582]
+
+virtual_rune:
+  enable: false # 调试时改 true
+  large: false # false=小符（恒速），true=大符（正弦）
+  x: 6.670
+  y: 0.0
+  z: 2.172
+  face_yaw: 0.0
+
+detector:
+  # openvino infer
+  model_location: "shenzhen-0526.onnx"
+  # model_location: "shenzhen-0708.onnx"
+  # model_location: "tongji-yolov5.xml"
+
+  infer_device: "CPU"
+  use_roi_segment: false
+  roi_rows: 640
+  roi_cols: 640
+  input_rows: 640
+  input_cols: 640
+  min_confidence: 0.5
+  score_threshold: 0.7
+  nms_threshold: 0.3
+
+  green_light_filter:
+    green_threshold: 120
+    min_area: 20
+    min_circularity: 0.6
+    max_aspect_ratio: 1.5
+
+tracker:
+  fallback_color: BLUE
+  timeout_seconds: 1.5
+  image_margin: 50
+
+  robot:
+    noise_x: 1e-4
+    noise_y: 1e-4
+    noise_z: 1e-8
+    noise_vx: 2e-1
+    noise_vy: 2e-1
+    noise_vz: 1e-8
+    noise_rotation_angle: 1e-3
+    noise_rotation_speed: 1e-0
+    noise_observation: 40.0
+
+  outpost:
+    process_noise_xy: 1e-6
+    process_noise_z: 1e-5
+    process_noise_speed: 1e-4
+    process_noise_angle: 1e-4
+    observation_noise_xy: 0.005
+    observation_noise_z: 0.01
+    observation_noise_yaw: 0.01
+    plate_switch_yaw_min: 50.0
+
+pose_estimator:
+  distance_optimizer: true
+
+  fixed_outpost_pitch: true
+  fixed_normal_pitch: false
+
+  outpost_armor_thickness: 0.022
+
+visualization:
+  publishable: true
+  drawable: true
+  enable_stream: true
+  framerate: 60
+  monitor_host: "127.0.0.1"
+  monitor_port: "5000"
+  stream_type: "RTP_H264"

@@ -1,0 +1,4 @@
+set(TRACKER_MANAGER_PLUGIN_TARGET tracker_manager_plugin_lib)
+add_library(${TRACKER_MANAGER_PLUGIN_TARGET} SHARED src/MinimalTrackerManager.cpp)
+target_include_directories(${TRACKER_MANAGER_PLUGIN_TARGET} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(${TRACKER_MANAGER_PLUGIN_TARGET} PUBLIC app_interface_lib class_loader_lib google_logger_lib)

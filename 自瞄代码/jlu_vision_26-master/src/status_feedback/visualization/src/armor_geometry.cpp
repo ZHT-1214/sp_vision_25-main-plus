@@ -1,0 +1,161 @@
+// Copyright (c) 2026 Author. All Rights Reserved.
+#include "armor_geometry.hpp"
+#include "Eigen/src/Geometry/Quaternion.h"
+#include "Eigen/src/Geometry/Transform.h"
+#include "msgs/Armor.hpp"
+#include "msgs/Header.hpp"
+#include "types/Armor.hpp"
+
+#include "iceoryx_posh/iceoryx_posh_types.hpp"
+#include "iceoryx_posh/internal/popo/base_subscriber.hpp"
+#include "iceoryx_posh/popo/sample.hpp"
+#include "iox/string.hpp"
+#include "open3d/geometry/Geometry3D.h"
+#include "open3d/geometry/MeshBase.h"
+#include "open3d/geometry/TriangleMesh.h"
+#include "open3d/io/TriangleMeshIO.h"
+#include "quill/LogMacros.h"
+#include "rfl/enums.hpp"
+#include "types/EnemyColor.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <exception>
+#include <iterator>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
+
+fb::ArmorGeometry::ArmorGeometry(quill::Logger *logger,
+                                 const ArmorGeometryConfig &config)
+    : logger_(logger), config_(config),
+      armor_sub_({{iox::TruncateToCapacity,
+                   config_.service_instance_event.at(0).c_str()},
+                  {iox::TruncateToCapacity,
+                   config_.service_instance_event.at(1).c_str()},
+                  {iox::TruncateToCapacity,
+                   config_.service_instance_event.at(2).c_str()}}),
+      tf_listener_(logger_, tf_buffer_) {
+  LOG_INFO(logger_, "start armor_geometry.");
+  this->tf_listener_.init();
+  this->armor_mesh_ = open3d::io::CreateMeshFromFile(config_.path_to_armor_stl);
+  armor_mesh_->Scale(config_.armor_scale, {0, 0, 0});
+  if (armor_mesh_ == nullptr) {
+    LOG_CRITICAL(logger_, "unable to load armor stl!");
+    std::exit(EXIT_FAILURE);
+  }
+  this->armor_listener_
+      .attachEvent(
+          armor_sub_, iox::popo::SubscriberEvent::DATA_RECEIVED,
+          iox::popo::createNotificationCallback(onArmorReceivedCallback, *this))
+      .or_else([&](auto) {
+        LOG_CRITICAL(logger_, "unable to attach armor!");
+        std::exit(EXIT_FAILURE);
+      });
+  LOG_DEBUG(logger_, "success attach armor.");
+}
+
+void fb::ArmorGeometry::onArmorReceivedCallback(
+    iox::popo::Subscriber<msgs::Armor, msgs::Header> *subscriber,
+    ArmorGeometry *self) {
+  std::vector<types::Armor> receive_armors;
+  while (subscriber->take().and_then( // 缓存全部队列
+      [&](const iox::popo::Sample<const msgs::Armor, const msgs::Header>
+              &sample) {
+        // if (subscriber->getServiceDescription().getInstanceIDString() ==
+        //     iox::capro::IdString_t{
+        //         iox::TruncateToCapacity,
+        //         self->config_.service_instance_event.at(1).c_str()}) {
+        // HACK: 不做筛选，一起订阅可视化detector和tracker的装甲板
+        types::Armor armor{sample};
+        // NOTE: 注意heartbeat是未初始化的脏数据，不要UB
+        if (!armor.heart_beat)
+          receive_armors.emplace_back(armor);
+        // }
+      })) {
+  } // end of cache update
+  if (!receive_armors.empty()) {
+    std::scoped_lock lk{self->armors_mtx_};
+    self->armors_cache_ = receive_armors;
+    LOG_DEBUG(self->logger_, "armor cache updated. size: {}",
+              self->armors_cache_.size());
+  }
+  return;
+}
+
+void fb::ArmorGeometry::update(
+    std::set<std::shared_ptr<open3d::geometry::Geometry3D>> &geom_ptrs) {
+  std::scoped_lock lk{armors_mtx_};
+  std::set<std::string> current_armor_ids;
+  Eigen::Isometry3d T_camera_to_fixed;
+  for (auto &&armor : armors_cache_) {
+    Eigen::Isometry3d armor_pose{Eigen::Isometry3d::Identity()};
+    armor_pose.pretranslate(armor.position);
+    armor_pose.rotate(armor.orientation.matrix());
+    try {
+      T_camera_to_fixed = tf_buffer_.get(
+          config_.fixed_frame_id, armor.frame_id, armor.stamp,
+          std::chrono::milliseconds{config_.tf_query_time_tolerance_ms});
+      // std::cout << "T matrix:\n" << T.matrix() << std::endl;
+    } catch (const std::exception &e) {
+      LOG_ERROR(logger_, "error looking transform form {} to {}: {}",
+                armor.frame_id, config_.fixed_frame_id, e.what());
+      continue;
+    }
+    auto armor_id = rfl::enum_to_string(armor.type) + '_' +
+                    rfl::enum_to_string(armor.color);
+    bool has_same_id{false};
+    do {
+      has_same_id = false;
+      for (const auto &other_id : current_armor_ids) {
+        if (other_id == armor_id) {
+          has_same_id = true;
+          armor_id += '_';
+          break;
+        }
+      }
+    } while (has_same_id);
+    current_armor_ids.emplace(armor_id);
+    Eigen::Isometry3d T{Eigen::Isometry3d::Identity()};
+    T.pretranslate(armor.position);
+    T.rotate(armor.orientation.matrix());
+    T = T_camera_to_fixed * T;
+    bool is_in_rander_set{false};
+    for (auto &&geo_ptr : geom_ptrs)
+      if (geo_ptr->GetName() == armor_id) {
+        transform_(geo_ptr, T);
+        is_in_rander_set = true;
+        break;
+      }
+    // 创建新增的装甲板
+    if (!is_in_rander_set) {
+      auto new_armor =
+          std::make_shared<open3d::geometry::TriangleMesh>(*armor_mesh_);
+      new_armor->SetName(armor_id);
+      const std::unordered_map<types::EnemyColor, Eigen::Vector3d> color_map{
+          {types::EnemyColor::Blue, {0, 0, 1}},
+          {types::EnemyColor::Red, {1, 0, 0}},
+          {types::EnemyColor ::Extinguished, {0, 0, 0}}};
+      new_armor->PaintUniformColor(color_map.at(armor.color));
+      new_armor->ComputeVertexNormals();
+      transform_(new_armor, T);
+      geom_ptrs.emplace(new_armor);
+    }
+  }
+  // 删掉消失的装甲板
+  std::set<std::string> decrease;
+  std::ranges::set_difference(last_armor_ids_, current_armor_ids,
+                              std::inserter(decrease, decrease.begin()));
+  LOG_DEBUG(logger_, "decrease {} armor(s).", decrease.size());
+  for (auto &&dec_armor_id : decrease)
+    for (auto it = geom_ptrs.begin(); it != geom_ptrs.end();)
+      if ((*it)->GetName() == dec_armor_id) {
+        it = geom_ptrs.erase(it);
+      } else {
+        it++;
+      }
+  last_armor_ids_ = current_armor_ids;
+  // LOG_INFO(logger_, "geom_ptrs size = {}", geom_ptrs.size());
+}

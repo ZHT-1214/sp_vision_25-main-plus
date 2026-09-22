@@ -1,0 +1,233 @@
+enemy_color: red
+max_infer_num: 5
+bullet_speed: 11.0
+
+serial:
+  enable: true
+  device_name: /dev/ttyACM0 
+  baud_rate: 115200
+  char_size: 8
+  read_buf_size: 4096
+serial_send_to_image_microseconds: 0
+
+
+record:
+ enable: false
+
+
+tf:
+  camera_in_gimbal:
+    t: [0.21,0.00,0.08]
+    R: [ 0.9781476,   0.    ,      0.20791169,
+       0. ,         1.    ,      0. ,
+       -0.20791169 , 0.   ,       0.9781476]
+  shoot_in_gimbal:
+    t: [0.2,0.0,0.0]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
+wheel_odometry:
+  q_xyz: [10.0,10.0,1.0]
+  r_vxyz: [0.05,0.05,0.05]
+
+bullet_pick_up:
+  ballistic_trajectory:
+    gravity: 9.8
+    resistance: 0.001
+  
+auto_exposure:
+  enable: true
+  target_brightness: 35.0
+  tolerance: 3.0
+  step_gain: 15.0
+  decay_step: 1.0
+  exposure_min: 200.0
+  exposure_max: 5500.0
+  control_interval_ms: 300
+
+
+armor_detector:
+  armor_infer:
+    model_type: tup
+    conf_threshold: 0.2
+  net_detector:
+    backend: openvino
+    openvino:
+      model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
+      device_name: "GPU"
+      perf_mode: "THROUGHPUT"
+      priority: "HIGH"
+      # scheduling_core_type: "PCORE_ONLY"
+      execution_mode: "PERFORMANCE"
+      infer_request_buffer_num: 10
+    tensorrt:
+      model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
+      copy_context_num: 3
+      min_free_mem_ratio: 0.1
+      use_cuda_preproces: true
+  number_classifier:
+    enable: true
+    model_path: ${ROOT_DIR}/model/mlp.onnx
+    label_path: ${ROOT_DIR}/model/label.txt
+  color_classifier:
+    enable: true
+    diff_threshold: 10.0
+  cv:
+    light:
+      bin_threshold: 120.0
+      min_wh_ratio: 0.001
+      max_wh_ratio: 0.4
+      max_angle: 40.0
+    armor:
+      min_ratio: 0.8
+      max_ratio: 5.0
+
+armor_tracker:
+  lost_time_thres: 0.5
+  lost_time_thres_outpost: 2.0
+  tracking_thres: 10
+  match_gate_armor: 50.0
+  match_gate_not_all_init_armor: 100.0
+  qxyz_common: [30.0, 30.0, 1.0]
+  qyaw_common: 100.0
+  qxyz_output: [1.0, 1.0, 0.5]
+  qyaw_output: 0.01
+  q_r: 0.0000001
+  q_l: 0.0000001
+  q_h: 0.0000001
+  q_outpost_dz: 0.01
+  enable_lights_measure: true
+  light_match_length_ratio_gate: 0.2
+  light_match_angle_gate: 0.2
+  light_match_pos_gate_by_length_ratio: 5.0
+  r_uv_at_1m: 70.0
+  r_uv_min: 30.0
+  esekf_iter_num: 5
+
+
+auto_aim_fsm:
+  single_whole_up: 1.5 
+  single_whole_down: 1.0
+  whole_pair_up: 3.5 
+  whole_pair_down: 2.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
+  pair_center_up: 16.5
+  pair_center_down: 15.0
+  transfer_time: 0.5
+
+
+very_aimer:
+  base_yaw_offset: -0.0
+  base_pitch_offset: -0.2
+  # base_yaw_offset: -0.0
+  # base_pitch_offset: -0.0
+  sample_total_time: 1.0
+  
+  sample_horizon: 200
+
+  fire_delay_min: 0.01
+  fire_delay_max: 0.05
+  
+  max_yaw_acc: 40
+  max_pitch_acc: 50
+  
+
+  prediction_delay: 0.00
+  aim_center_more_prediction_time: 0.0
+
+  shooting_range_h: 0.12
+  shooting_range_w_small: 0.12
+  shooting_range_w_large: 0.24
+  min_enable_pitch_deg: 0.25
+  min_enable_yaw_deg: 0.25
+  ballistic_trajectory:
+    gravity: 9.8
+    resistance: 0.001
+
+
+
+
+
+
+camera: 
+  hik_camera:
+    target_sn: DA2166432
+    adc_bit_depth: Bits_8
+    pixel_format: BayerRG8 #RGB8Packed
+    reverse_x: false
+    reverse_y: false
+    width: 1440
+    height: 1080
+    offset_x: 0
+    offset_y: 0
+    acquisition_frame_rate_enable: true
+    acquisition_frame_rate: 30
+    exposure_time: 1500
+    gain: 16.9
+    gamma: 0.7 #Bayer用不了
+    trigger_mode: Off
+    trigger_source: ""
+    trigger_activation: ""
+    format: "bgr" 
+    use_cuda_cvt: true
+  mv_camera:
+    frame_speed: 2
+    exposure_time: 2000
+    r_gain: 200
+    b_gain: 150
+    g_gain: 200
+    # analog_gain: 100.0
+    # gamma: 120
+  camera_info:
+    image_width: 1280
+    image_height: 1024
+    camera_name: narrow_stereo
+    camera_matrix:
+      rows: 3
+      cols: 3
+      data: [1040.3717 ,    0.     ,  654.8083 ,
+                0.     , 1040.45039,  516.48859,
+                0.     ,    0.     ,    1.     ]
+    distortion_model: plumb_bob
+    distortion_coefficients:
+      rows: 1
+      cols: 5
+      data: [-0.097818, 0.093984, 0.000866, 0.000533, 0.000000]
+    rectification_matrix:
+      rows: 3
+      cols: 3
+      data: [1., 0., 0.,
+            0., 1., 0.,
+            0., 0., 1.]
+    projection_matrix:
+      rows: 3
+      cols: 4
+      data: [1016.2797 ,    0.     ,  655.30471,    0.     ,
+                0.     , 1021.00509,  517.31738,    0.     ,
+                0.     ,    0.     ,    1.     ,    0.     ]
+
+mqtt:
+  enable: true
+  server: "tcp://127.0.0.1:3333"
+  client_id: "encoder_hero"
+  topic: "CustomByteBlock"
+
+encoder:
+  # ----- 编码器参数 -----
+  fps: 30                       # 输出帧率
+  target_bitrate: 70           # 目标比特率（kbps）
+  max_packets_per_sec: 50       # 每秒最大包数（令牌桶速率）
+
+  # ----- 图像预处理参数 -----
+  crop_size: 350                # 中心裁剪区域大小
+  output_w: 300                 # 编码输出宽度
+  output_h: 300                 # 编码输出高度
+  static_simplify: true         # 开启动静分离
+  motion_threshold: 14          # 运动检测阈值
+  motion_erode_px: 2            # 腐蚀
+  motion_dilate_px: 6           # 膨胀
+  motion_trail_frames: 0        # 拖影历史帧数，0 表示关闭
+  trail_disable_motion_ratio: 0.01   # 拖影抑制运动比例阈值
+  bg_update_alpha: 0.01         # 背景更新速度
+  bg_blur_sigma: 0.1            # 静态模糊强度
+  center_clear_size: 200        # 中心保护区域尺寸
+  force_monochrome: false        # 仅中心保留彩色
+
+    

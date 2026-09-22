@@ -1,0 +1,4 @@
+set(RECEIVE_DECODER_PLUGIN_TARGET receive_decoder_plugin_lib)
+add_library(${RECEIVE_DECODER_PLUGIN_TARGET} SHARED src/MinimalReceiveDecoder.cpp)
+target_include_directories(${RECEIVE_DECODER_PLUGIN_TARGET} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(${RECEIVE_DECODER_PLUGIN_TARGET} PUBLIC app_interface_lib class_loader_lib google_logger_lib)

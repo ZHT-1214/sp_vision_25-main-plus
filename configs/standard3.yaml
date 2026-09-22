@@ -1,0 +1,153 @@
+# enemy_color: "red"
+enemy_color: "blue"
+
+#####-----神经网络参数-----#####
+yolo_name: yolov5
+classify_model: assets/tiny_resnet.onnx
+yolo11_model_path: assets/yolo11.xml
+yolov8_model_path: assets/yolov8.xml
+yolov5_model_path: assets/yolov5.xml
+device: CPU
+min_confidence: 0.8
+use_traditional: true
+
+#####-----ROI-----#####
+roi: 
+  x: 420
+  y: 50
+  width: 600
+  height: 600
+
+use_roi: false
+
+#####-----传统方法参数-----#####
+threshold: 150
+max_angle_error: 45 # degree
+min_lightbar_ratio: 1.5
+max_lightbar_ratio: 20
+min_lightbar_length: 8
+min_armor_ratio: 1
+max_armor_ratio: 5
+max_side_ratio: 1.5
+max_rectangular_error: 25 # degree
+
+
+#####-----tracker参数-----#####
+min_detect_count: 5
+max_temp_lost_count: 15
+outpost_max_temp_lost_count: 75
+armor_height_diff: -0.015 # m, 相邻装甲板中心的高度差，实战中只做先验估计
+armor_radius: 0.195 # m，靶车，四装甲板中心到旋转中心的水平距离，实战中只做先验估计
+stationary_target: false # 确定旋转中心，平移目标改为 false，用于在靶车在旋转不平移时调出最合适的延迟时间
+lock_stationary_center: false # 针对不平移目标,收敛后锁定中心，避免未观测绿框被中心噪声带动
+
+# 马氏距离门控参数（与 standard3.yaml 一致，缺失时 tracker 会回退默认值）
+#   gate_threshold: 门控阈值（chi2 4 自由度分位）。调大=宽松，调小=严格。默认 13.28(99%)。
+#   gate_yaw_noise / gate_pitch_noise: yaw/pitch 观测噪声方差 rad^2（默认 0.004）
+#   gate_distance_noise_ratio: 距离噪声比例，std = 比例 × 距离（默认 0.05）
+#   gate_angle_noise: 装甲板 yaw 噪声方差 rad^2（默认 0.09）
+gate_threshold: 13.28
+gate_yaw_noise: 0.004
+gate_pitch_noise: 0.004
+gate_distance_noise_ratio: 0.05
+gate_angle_noise: 0.09
+
+#####-----aimer参数-----#####d
+yaw_offset: 0.5 # degree -2.5
+pitch_offset: 0.5 # degree 20上正下负，不宜调太多
+spin_speed_scale: 5 # rad/s，越小：较低转速时越偏向正面板，瞄准点也越快向旋转中心收缩，开始明显缩小摆幅
+min_aim_radius_ratio: 0.5 # 高速瞄准半径渐近比例；越小枪口摆幅越小，0=趋向旋转中心，越偏离预瞄点
+# comming_angle: 80 # degree，夹角小于此值才视为“进入正面”并允许开火，用于旧的aimer逻辑
+leaving_angle: 10 # degree，当装甲板从正面转出且夹角大于此值时立即停止开火
+min_shoot_angle: 25  # degree，高速时允许开火的正面夹角渐近值
+decision_speed: 2.5 # rad/s，仅用于选择 high/low_speed_delay_time
+high_speed_delay_time: 0.08 # s
+low_speed_delay_time: 0.05 # s
+
+#####-----shooter参数-----####
+first_tolerance: 5 # 近距离射击容差，degree
+second_tolerance: 6 # 远距离射击容差，degree
+judge_distance: 2 #距离判断阈值
+auto_fire: true # 是否由自瞄控制射击
+
+camera_name: "mindvision"
+exposure_ms: 3
+# gain: 16
+gamma: 0.5
+
+vid_pid: "2bdf:0001"
+
+# -1  0  0
+#  0 -1  0
+#  0  0  1
+R_gimbal2imubody: [1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
+
+camera_matrix: [1559.0842855074932, 0, 604.88629474429763, 0, 1558.8167461517098, 491.53961826585481, 0, 0, 1]
+distort_coeffs: [-0.19929372439193949, 0.17299390457154543, 0.00017253696527652415, 0.00040402734352460806, 0]
+
+# R_camera2gimbal: [-0.0247700823652, 0.0320356791475, 0.99917974273, -0.998331380576, 0.05135874643, -0.026395714123, -0.0521622236733, -0.998166316016, 0.030710063412]
+# t_camera2gimbal: [0.0686360531657, 2.092647e-07, 0.100000090803]
+R_camera2gimbal: [-0.0250428623396, 0.0268088772819, 0.999326843003, -0.998331380576, 0.05135874643, -0.026395714123, -0.0520318133911, -0.998320371056, 0.025477973452]
+t_camera2gimbal: [0.0686360531657, 2.092647e-07, 0.100000090803]
+
+
+
+# 相机
+
+#####-----cboard参数-----#####
+quaternion_canid: 0x100
+bullet_speed_canid: 0x101
+send_canid: 0xff
+can_interface: "can0"
+
+#####-----gimbal参数-----#####
+# com_port: "/dev/gimbal"
+com_port: "/dev/ttyACM0"
+
+#####-----planner-----#####
+fire_thresh: 0.05 ##允许的最小开火角度差，不宜过大，过大容易误判，过小容易漏打
+
+max_yaw_acc: 50
+Q_yaw: [9e6, 0]
+R_yaw: [1]
+
+max_pitch_acc: 50
+Q_pitch: [9e6,0]
+R_pitch: [1]
+# Q_pitch: [3e5, 2e3]
+# R_pitch: [10]
+#####-----buff_detector参数-----#####
+model: "assets/yolo11_buff_int8.xml"
+
+# detect:
+#   contrast: 1
+#   brightness: 
+#     blue: -120
+#     red: -100
+#   brightness_threshold:
+#     blue: 120
+#     red: 40
+#   morphology_size:
+#     blue: 3
+#     red: 3
+#   dilate_size: 2
+#   # canny_low_threshold: 100
+#   # canny_high_threshold: 180
+#   # approx_epsilon: 1.0
+#   R_contours_min_area: 200
+#   R_contours_max_area: 600
+#   fanblades_head_contours_min_area: 3000
+#   fanblades_head_contours_max_area: 8000
+#   fanblades_body_contours_min_area: 1000
+#   fanblades_body_contours_max_area: 4000
+#   standard_fanblade_path: ./assets/standard_fanblade.jpg
+
+#####-----buff_aimer参数-----#####
+# aim_time: 0.150         # s
+# wait_time: 0.300        # s
+# command_fire_gap: 0.080 # s
+# predict_time: 0.150     # s
+fire_gap_time: 0.700   # s
+predict_time: 0.120     # s

@@ -1,0 +1,19 @@
+# Xmake cache
+.xmake/
+build/
+
+# Clangd cache
+.cache/
+
+# Third Party Libs
+src/third_party/open3d/open3d-devel-linux-x86_64-cxx11-abi-0.19.0/
+
+# MacOS Cache
+.DS_Store
+
+# logs
+logs/
+log/
+.vscode/
+compile_commands.json
+.clang-format 

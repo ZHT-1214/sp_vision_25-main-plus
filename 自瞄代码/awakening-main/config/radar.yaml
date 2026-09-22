@@ -1,0 +1,202 @@
+max_infer_num: 3
+self_color: red
+tf:
+  camera_cv_in_target_map:
+    t: [0.18863424, 9.46495291, 1.19410844]
+   
+    R: [-0.1502768,  -0.00584678,  0.98862667,
+      -0.98842779, -0.02002177, -0.15036498,
+      0.02067321, -0.99978245, -0.00277031]
+
+referee_serial:
+  enable: true
+  device_name: /dev/ttyUSB0
+  baud_rate: 115200
+  char_size: 8
+  read_buf_size: 4096
+wifi_serial:
+  enable: true
+  device_name: /dev/ttyACM0
+  baud_rate: 115200
+  char_size: 8
+  read_buf_size: 4096
+detector:
+  car_confidence_threshold: 0.2
+  armor_confidence_threshold: 0.2
+  armor_color_diff_threshold: 5
+  car:
+    model_path: /home/hy/radar_data/Horizon-Car-yolov8s-ghost-p2-2026-04-06.onnx
+    copy_context_num: 3
+    min_free_mem_ratio: 0.1
+    use_cuda_preproces: true
+  armor:
+    model_path: /home/hy/radar_data/Horizon-Armor-yolov8n-ghost-p2-2026-04-04.onnx
+    copy_context_num: 3
+    min_free_mem_ratio: 0.1
+    use_cuda_preproces: true
+pixel_to_world:
+  mesh_path: /home/hy/radar_data/radar.stl
+  # mesh_path: /home/hy/opensourcelearn/RM2025-Radar-Algorithm/field/RMUC2025_National.PLY
+map:
+  map_path: /home/hy/awakening/config/rmuc2026.png
+  d_factor: 0.01
+  cos_factor: 0.003
+  guess_path: /home/hy/awakening/config/guess_point.yaml
+car_pool:
+  to_guess_dt: 3.0
+tracker:
+  max_match_cost: 5.0
+  track_threshold: 5
+  lost_time: 1.0
+  v_damping: 0.9
+  iou_thresh: 0.5
+  w_dist: 5.5
+  w_iou: 2.0
+  w_id: 7.0
+  p_target:
+    esekf_iter_num: 3
+    yp_r: 0.0015
+    dis_r: 0.05
+    qxyz: [1.0, 1.0, 1.0]
+outpost_bbox:
+  x: 1761
+  y: 1324
+  w: 308
+  h: 256
+cal_pts:
+  - [2247, 2764]
+  - [816, 2623]
+  - [451, 2141]
+  - [1327, 1739]
+  - [1228, 2293]
+  - [2885, 2264]
+  - [2490, 1818]
+  - [3378, 1970]
+camera: 
+  type: video
+  hik_camera:
+    target_sn: 00J14461534
+    adc_bit_depth: Bits_8
+    pixel_format: BayerRG8 #RGB8Packed
+    reverse_x: false
+    reverse_y: false
+    width: 4000
+    height: 3036
+    offset_x: 0
+    offset_y: 0
+    acquisition_frame_rate_enable: true
+    acquisition_frame_rate: 30
+    exposure_time: 10000
+    gain: 1.9
+    gamma: 0.7 #Bayer用不了
+    trigger_mode: Off
+    trigger_source: ""
+    trigger_activation: ""
+    format: "bgr" 
+    use_cuda_cvt: true
+  video:
+    path: /home/hy/data/ENTERPRIZE战队RM2025开源第一视角/7.27-华东理工.mp4
+    fps: 30
+    start_frame: 7000
+    loop: true
+  mv_camera:
+    frame_speed: 0
+    exposure_time: 2000
+    r_gain: 200
+    b_gain: 150
+    g_gain: 200
+    # analog_gain: 100.0
+    # gamma: 120
+  camera_info:
+    # image_width: 4000
+    # image_height: 3036
+    # camera_name: camera1
+    # camera_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   # data: [4505.44779,    0.     , 1990.47019,
+    #   #           0.     , 4507.4661 , 1572.4761 ,
+    #   #           0.     ,    0.     ,    1.     ]
+    #   data: [5033.78027, 0., 2829.23462, 0., 5036.14014, 929.489563, 0., 0., 1.]
+    # distortion_model: plumb_bob
+    # distortion_coefficients:
+    #   rows: 1
+    #   cols: 5
+    #   data: [-0.115244, 0.478127, -0.000094, 0.001181, 0.000000]
+    # rectification_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [1., 0., 0.,
+    #         0., 1., 0.,
+    #         0., 0., 1.]
+    # projection_matrix:
+    #   rows: 3
+    #   cols: 4
+    #   data: [4553.43996,    0.     , 1994.43544,    0.     ,
+    #             0.     , 4554.90789, 1570.34321,    0.     ,
+    #             0.     ,    0.     ,    1.     ,    0.     ]
+    image_width: 4000
+    image_height: 3036
+    camera_name: narrow_stereo
+    camera_matrix:
+      rows: 3
+      cols: 3
+      data: [3268.47228,    0.     , 1979.59197,
+                0.     , 3267.21451, 1471.80512,
+                0.     ,    0.     ,    1.     ]
+    distortion_model: plumb_bob
+    distortion_coefficients:
+      rows: 1
+      cols: 5
+      data: [-0.072243, 0.068310, 0.000746, 0.000713, 0.000000]
+    rectification_matrix:
+      rows: 3
+      cols: 3
+      data: [1., 0., 0.,
+            0., 1., 0.,
+            0., 0., 1.]
+    projection_matrix:
+      rows: 3
+      cols: 4
+      data: [3211.36167,    0.     , 1982.49987,    0.     ,
+                0.     , 3226.10104, 1472.57655,    0.     ,
+                0.     ,    0.     ,    1.     ,    0.     ]
+
+lidar_location:
+  target_map_path: /home/hy/awakening/source.pcd
+  voxel_size: 0.5
+  min_p: [0.0,-10.0,-3.0]
+  max_p: [27.0,3.0,0.0]
+  lost_dt: 0.1
+  match_vol_ratio: 0.3
+  diff_th: 0.15
+  diff_accumulation_time: 1.0
+  cluster_eps: 0.3
+  cluster_min_pts: 5
+  cluster_leaf_size: 0.05
+  car_target:
+    grav_target:
+      esekf_iter_num: 3
+      yp_r: 0.0015
+      dis_r: 0.02
+      qxyz: [10.0, 10.0, 10.0]
+    aabb_target: #相对grav_target坐标
+      esekf_iter_num: 1
+      yp_r: 0.01
+      dis_r: 0.01
+      qxyz: [10.1, 10.1, 10.1]
+
+
+lidar_driver:
+  batch_dot_num: 9600
+  dest_ip: "192.168.10.203"
+  udp_port: 50010
+  timeout_ms: 1000
+
+radar_cal:
+  source_in_target:
+    t: [-0.44,-3.46755,1.65378]
+    R: [0.999943,  0.00847229,  0.00645632,
+      -0.00841243 ,   0.999922 ,-0.00924399,
+      -0.00653414 , 0.00918915,    0.999936]
+  target_pcd: /home/hy/radar_data/combined_with_walls.pcd

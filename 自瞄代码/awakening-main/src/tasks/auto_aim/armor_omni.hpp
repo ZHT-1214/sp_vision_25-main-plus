@@ -1,0 +1,76 @@
+#pragma once
+#include "tasks/auto_aim/armor_detect/armor_detector.hpp"
+#include "tasks/auto_aim/armor_track/armor_tracker.hpp"
+#include "utils/buffer.hpp"
+#include "utils/drivers/camera_factory.hpp"
+#include <memory>
+#include <opencv2/core/types.hpp>
+#include <unordered_map>
+#include <utility>
+namespace awakening::auto_aim {
+class ArmorOmni {
+public:
+    struct One {
+        std::unique_ptr<Camera> camera;
+        std::unique_ptr<ArmorTracker> tracker;
+        ArmorTarget target;
+        CameraInfo camera_info;
+        std::unique_ptr<utils::OrderedQueue<auto_aim::Armors>> armors_queue;
+        int frame_id;
+        int cv_frame_id;
+        int order_id = 0;
+        double total_score;
+        One(const YAML::Node& config,
+            int frame_id,
+            int cv_frame_id,
+            const YAML::Node& tracker_config) {
+            camera = create_camera(config, "uvc");
+            camera->start_capture();
+            this->frame_id = frame_id;
+            this->cv_frame_id = cv_frame_id;
+            this->total_score = 0.0;
+            this->order_id = 0;
+            camera_info.load(config["camera_info"]);
+            armors_queue = std::make_unique<utils::OrderedQueue<auto_aim::Armors>>();
+            tracker = std::make_unique<ArmorTracker>(tracker_config);
+        }
+    };
+    ArmorOmni(const YAML::Node& config) {
+        config_ = config;
+        fps_ = config["fps"].as<double>();
+        detector_ = std::make_unique<ArmorDetector>(config["armor_detector"]);
+    }
+    void emplace_one(const YAML::Node& config, int frame_id, int cv_frame_id) {
+        ones_.emplace(frame_id, One(config, frame_id, cv_frame_id, config_["armor_tracker"]));
+        ones_keys_.push_back(frame_id);
+    }
+    One& get_next() {
+        if (ones_keys_.empty()) {
+            throw std::runtime_error("empty");
+        }
+
+        current_ones_idx_ %= ones_keys_.size();
+        int key = ones_keys_[current_ones_idx_++];
+
+        return ones_.at(key);
+    }
+    ArmorTarget update() {
+        double max_score = std::numeric_limits<double>::lowest();
+        for (auto& [_, one]: ones_) {
+            if (one.total_score > max_score) {
+                max_score = one.total_score;
+                best_target_ = one.target.fast_copy_without_ekf();
+            }
+        }
+        return best_target_;
+    }
+    std::unique_ptr<ArmorDetector> detector_;
+    double fps_ = 10;
+
+    YAML::Node config_;
+    std::unordered_map<int, One> ones_;
+    std::vector<int> ones_keys_;
+    size_t current_ones_idx_ = 0;
+    ArmorTarget best_target_;
+};
+} // namespace awakening::auto_aim

@@ -1,0 +1,234 @@
+enemy_color: red #识别颜色，只有调试时使用，比赛使用裁判系统数据
+max_infer_num: 5 #最大识别并发数 一般不用改
+bullet_speed: 21.0 #弹丸初速度 只有调试时使用，需要得到电控设置，比赛使用裁判系统数据，该参数影响pitch的补偿，弹丸飞行预测时间
+
+serial:
+  enable: true #是否开串口
+  device_name: /dev/ttyACM0 #挂载路径
+  baud_rate: 115200 #不用改
+  char_size: 8
+  read_buf_size: 4096
+serial_send_to_image_microseconds: 0
+use_sim: false #是否使用仿真
+
+recorder:
+  enable: false #是否启用录制
+player:
+  enable: false #是否使用回放数据
+  path: /home/hy/awakening/record/auto_aim/2026-04-08_00-43-38.bin
+
+tf: #有ros2环境的可以开rviz看效果
+  camera_in_gimbal: #相机与云台旋旋转中心外参，影响去运动畸变精度，弹道补偿
+    t: [0.00,0.00,0.08]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0] 
+  shoot_in_gimbal: #测速枪口与云台旋转中心外参，这里只影响可视化的弹道重现
+    t: [0.1,0.0,0.0]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
+wheel_odometry:
+  q_xyz: [10.0,10.0,1.0]
+  r_vxyz: [0.05,0.05,0.05]
+
+bullet_pick_up: #弹道重现参数，与very_aimer设置的一直即可
+  ballistic_trajectory:
+    gravity: 9.8
+    resistance: 0.092
+  
+auto_exposure: #自动曝光
+  enable: true
+  target_brightness: 35.0 #目标平均亮度，10 - 50 一般不用调
+  tolerance: 3.0
+  step_gain: 15.0
+  decay_step: 1.0
+  exposure_min: 100.0
+  exposure_max: 3500.0
+  control_interval_ms: 300
+
+
+armor_detector: #用车上原来的参数就行已经是最优解
+  armor_infer:
+    model_type: tup
+    conf_threshold: 0.2
+  net_detector:
+    backend: openvino
+    openvino:
+      model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
+      device_name: "GPU"
+      perf_mode: "THROUGHPUT"
+      priority: "HIGH"
+      # scheduling_core_type: "PCORE_ONLY"
+      execution_mode: "PERFORMANCE"
+    tensorrt:
+      model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
+      copy_context_num: 3
+      min_free_mem_ratio: 0.1
+      use_cuda_preproces: true
+  number_classifier:
+    enable: true
+    model_path: ${ROOT_DIR}/model/mlp.onnx
+    label_path: ${ROOT_DIR}/model/label.txt
+  color_classifier:
+    enable: true
+    diff_threshold: 20.0
+
+armor_tracker:
+  lost_time_thres: 1.5
+  tracking_thres: 10
+  match_gate_at_1m: 50.0
+  match_gate_not_all_init_at_1m: 100.0
+  qxyz_common: [30.0, 30.0, 1.0]
+  qyaw_common: 100.0
+  qxyz_output: [1.0, 1.0, 0.5]
+  qyaw_output: 0.01
+  q_r: 0.0000001
+  q_l: 0.0000001
+  q_h: 0.0000001
+  q_outpost_dz: 0.5
+  q_whole_car_roll_pitch: 0.0000001
+  enable_whole_car_roll_pitch: false
+  r_uv_at_1m: 70.0
+  r_uv_min: 30.0
+  esekf_iter_num: 5
+auto_aim_fsm: #多种瞄准模式target vyaw控制阈值 single：目标速度小锁定较优板 whole： 锁定全部板 pair： 4选2 center：瞄准中心
+  single_whole_up: 1.5 
+  single_whole_down: 1.0
+  whole_pair_up: 6.5 
+  whole_pair_down: 7.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
+  pair_center_up: 16.5
+  pair_center_down: 15.0
+  transfer_thresh: 50
+
+
+very_aimer:
+  base_yaw_offset: -0.5 # yaw补偿
+  base_pitch_offset: 2.0 # pitch补偿 两个都调好理论上发出弹丸会与可视化弹道重现重合，可以在没有靶车的时候临时调整
+  # base_yaw_offset: -0.0
+  # base_pitch_offset: -0.0
+  sample_total_time: 1.0
+  
+  sample_horizon: 200
+
+  fire_delay_min: 0.01
+  fire_delay_max: 0.05
+  
+  max_yaw_acc: 40
+  max_pitch_acc: 50
+  
+
+  prediction_delay: 0.00
+  aim_center_more_prediction_time: 0.0
+
+  shooting_range_h: 0.12
+  shooting_range_w_small: 0.12
+  shooting_range_w_large: 0.24
+  min_enable_pitch_deg: 0.25
+  min_enable_yaw_deg: 0.25
+  ballistic_trajectory:
+    gravity: 9.8
+    resistance: 0.001
+
+
+
+camera: 
+  hik_camera:
+    target_sn: DA2166432 #sn码 不匹配的话看终端提示就是
+    adc_bit_depth: Bits_8
+    pixel_format: BayerRG8 #RGB8Packed
+    reverse_x: false
+    reverse_y: false
+    width: 1440
+    height: 1080
+    offset_x: 0
+    offset_y: 0
+    acquisition_frame_rate_enable: true
+    acquisition_frame_rate: 200
+    exposure_time: 1500
+    gain: 16.9
+    gamma: 0.7 #Bayer用不了
+    trigger_mode: Off
+    trigger_source: ""
+    trigger_activation: ""
+    format: "bgr" 
+    use_cuda_cvt: true
+  camera_info: #相机内参，根据相机焦距选择以下预设或者自己标定
+    #8mm
+    # image_width: 1440
+    # image_height: 1080
+    # camera_name: narrow_stereo
+    # camera_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [2419.64498,    0.     ,  719.05623,
+    #             0.     , 2414.38209,  538.71651,
+    #             0.     ,    0.     ,    1.     ]
+    # distortion_model: plumb_bob
+    # distortion_coefficients:
+    #   rows: 1
+    #   cols: 5
+    #   data: [-0.033521, 0.087954, -0.002045, -0.001438, 0.000000]
+    # rectification_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [1., 0., 0.,
+    #          0., 1., 0.,
+    #          0., 0., 1.]
+    # projection_matrix:
+    #   rows: 3
+    #   cols: 4
+    #   data: [2413.22632,    0.     ,  717.5196 ,    0.     ,
+    #             0.     , 2408.83228,  537.43444,    0.     ,
+    #             0.     ,    0.     ,    1.     ,    0.     ]
+    #6mm
+
+    image_width: 1440
+    image_height: 1080
+    camera_name: narrow_stereo
+    camera_matrix:
+      rows: 3
+      cols: 3
+      data: [1814.19888,    0.     ,  730.27359,
+                0.     , 1807.37177,  529.57031,
+                0.     ,    0.     ,    1.     ]
+    distortion_model: plumb_bob
+    distortion_coefficients:
+      rows: 1
+      cols: 5
+      data: [-0.089138, 0.114766, 0.000034, 0.000238, 0.000000]
+    rectification_matrix:
+      rows: 3
+      cols: 3
+      data: [1., 0., 0.,
+            0., 1., 0.,
+            0., 0., 1.]
+    projection_matrix:
+      rows: 3
+      cols: 4
+      data: [1793.54229,    0.     ,  730.67194,    0.     ,
+                0.     , 1794.48784,  529.46193,    0.     ,
+                0.     ,    0.     ,    1.     ,    0.     ]
+    #12mm
+    # image_width: 1440
+    # image_height: 1080
+    # camera_name: narrow_stereo
+    # camera_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [3655.11292,    0.     ,  748.66803,
+    #             0.     , 3648.34439,  556.97683,
+    #             0.     ,    0.     ,    1.     ]
+    # distortion_model: plumb_bob
+    # distortion_coefficients:
+    #   rows: 1
+    #   cols: 5
+    #   data: [-0.058763, 1.430269, 0.001191, 0.001641, 0.000000]
+    # rectification_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [1., 0., 0.,
+    #          0., 1., 0.,
+    #          0., 0., 1.]
+    # projection_matrix:
+    #   rows: 3
+    #   cols: 4
+    #   data: [3659.22949,    0.     ,  748.71496,    0.     ,
+    #             0.     , 3652.02661,  556.81908,    0.     ,
+    #             0.     ,    0.     ,    1.     ,    0.     ]

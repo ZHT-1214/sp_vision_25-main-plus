@@ -1,0 +1,382 @@
+#include "auto_aim.hpp"
+
+#include "kernel/detector.hpp"
+#include "kernel/pose_estimator.hpp"
+#include "kernel/tracker.hpp"
+#include "kernel/visualization.hpp"
+#include "module/tracker/model/virtual_rune.hpp"
+
+#include "utility/framerate.hpp"
+#include "utility/math/linear.hpp"
+#include "utility/panic.hpp"
+#include "utility/rclcpp/configuration.hpp"
+#include "utility/rclcpp/node.hpp"
+#include "utility/rclcpp/parameters.hpp"
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <experimental/scope>
+#include <filesystem>
+#include <iterator>
+#include <memory>
+
+using namespace rmcs;
+using namespace rmcs::util;
+using namespace rmcs::kernel;
+
+struct AutoAim::Impl {
+    AutoAim& self;
+    RclcppNode node { "auto_aim" };
+
+    Detector detector { };
+    PoseEstimator estimator { };
+    Visualization visual { };
+
+    std::unique_ptr<Tracker> tracker;
+
+    std::optional<VirtualRuneModel> virtual_rune;
+
+    FramerateCounter counter;
+
+    explicit Impl(AutoAim& self)
+        : self { self } {
+
+        node.set_pub_topic_prefix("/rmcs/auto_aim/");
+
+        using namespace std::chrono_literals;
+        counter.set_interval(5s);
+
+        const auto configs           = util::configs();
+        const auto camera_matrix     = configs["camera_matrix"].as<std::array<double, 9>>();
+        const auto distort_coeff     = configs["distort_coeff"].as<std::array<double, 5>>();
+        const auto use_visualization = configs["use_visualization"].as<bool>();
+
+        const auto handle_result = [&](auto runtime_name, const auto& result) {
+            if (!result.has_value()) {
+                node.error("Failed to init '{}'", runtime_name);
+                node.error("  {}", result.error());
+                util::panic(std::format("Failed to initialize {}", runtime_name));
+            }
+        };
+
+        {
+            auto config         = configs["detector"];
+            auto model_location = std::filesystem::path { util::Parameters::share_location() }
+                / std::filesystem::path { config["model_location"].as<std::string>() };
+            config["model_location"] = model_location.string();
+            handle_result("detector", detector.initialize(config));
+        }
+        {
+            auto config = configs["pose_estimator"];
+            handle_result("estimator", estimator.initialize(config));
+            estimator.configure_camera(camera_matrix, distort_coeff);
+        }
+        if (use_visualization) {
+            auto config = configs["visualization"];
+            handle_result("visualization", visual.initialize(config));
+        }
+
+        detector.update_camera(camera_matrix);
+        detector.update_camera(distort_coeff);
+
+        tracker = std::make_unique<Tracker>(configs["tracker"]);
+        tracker->update_camera(camera_matrix);
+        tracker->update_camera(distort_coeff);
+
+        if (const auto virtual_node = configs["virtual_rune"];
+            virtual_node && !virtual_node.IsNull()) {
+            auto config = VirtualRuneModel::Config { };
+            if (auto ret = config.serialize(virtual_node); !ret) {
+                node.error("VirtualRune config error: {}", ret.error());
+                util::panic(std::format("Failed to initialize VirtualRune"));
+            }
+            if (config.enable) {
+                virtual_rune.emplace(config);
+                virtual_rune->update_camera(camera_matrix);
+                virtual_rune->update_camera(distort_coeff);
+                node.warn("VirtualRune enabled at ({}, {}, {}), {}", config.x, config.y, config.z,
+                    config.large ? "large" : "small");
+            }
+        }
+    }
+
+    auto process(const Image& image) -> void {
+        using namespace rmcs_msgs;
+
+        node.spin_once();
+
+        const auto& image_mat = image.mat();
+        if (image_mat.empty()) return;
+
+        const auto context = [&] {
+            std::lock_guard lock { self.context_mutex };
+            return self.current_context;
+        }();
+        const auto& addition = context.addition;
+
+        auto yaw   = 0.0;
+        auto pitch = 0.0;
+        auto iso   = Transform { };
+
+        {
+            /// 约定：imu_orientation 为 PitchLink 在 OdomImu 下的姿态，
+            /// 相机与其仅相差外参平移（装配不引入旋转）
+            const auto q = image.imu_orientation().make<Eigen::Quaterniond>();
+
+            iso.orientation = image.imu_orientation();
+            iso.translation =
+                Translation { q * context.camera_translation.make<Eigen::Vector3d>() };
+
+            const auto d = q * Eigen::Vector3d::UnitX();
+            yaw          = std::atan2(d.y(), d.x());
+            pitch        = std::atan2(-d.z(), std::hypot(d.x(), d.y()));
+        }
+
+        visual.publish(iso, "camera_link");
+        visual.publish(yaw, "yaw");
+        visual.publish(pitch, "pitch");
+
+        if (counter.tick()) {
+            node.info("fps: {:03} mya: {:03.1f} myv: {:02.2f}", counter.fps(), context.max_yaw_acc,
+                context.max_yaw_vel);
+        }
+
+        [[maybe_unused]] auto streamer = std::experimental::scope_exit { [&] {
+            visual.draw_later(Canvas::Text { std::format("FPS: {}", counter.fps()), { 10, 680 } });
+            if (visual.initialized()) {
+                auto visualization_image = image.clone_mat();
+                visual.update_image(visualization_image);
+            }
+        } };
+
+        /// [] 识别装甲板，灯条，大符页等元素
+        auto armor2ds       = Armor2ds { };
+        auto lightbar2ds    = Lightbar2ds { };
+        auto rune_icons     = std::vector<RuneIcon> { };
+        auto rune_bullseyes = std::vector<RuneBullseye> { };
+        if (context.id != RobotId::UNKNOWN) {
+            detector.update_detect_color(
+                (context.id.color() == RobotColor::RED) ? CampColor::BLUE : CampColor::RED);
+        }
+        detector.update_detect_rune(context.track_rune);
+
+        auto result = detector.detect(image_mat);
+        if (virtual_rune) {
+            virtual_rune->update_transform(iso);
+            virtual_rune->update(image.timestamp());
+
+            result.icons.clear();
+            result.bullseyes.clear();
+            std::ranges::copy(virtual_rune->icons(), std::back_inserter(result.icons));
+            std::ranges::copy(virtual_rune->bullseyes(), std::back_inserter(result.bullseyes));
+        }
+
+        for (const auto& icon : result.icons) {
+            visual.draw_later(Canvas::Point {
+                .origin = icon.center.make<cv::Point2i>(),
+                .radius = 5,
+                .color  = kGreen,
+            });
+            visual.draw_later(Canvas::Text {
+                .content  = std::format("R: {:.3f}", icon.score),
+                .top_left = icon.center.make<cv::Point2i>(),
+                .color    = kGreen,
+            });
+        }
+        for (const auto& bullseye : result.bullseyes) {
+            if (!bullseye.active) {
+                for (const auto& corner : bullseye.corners) {
+                    visual.draw_later(Canvas::Point {
+                        .origin = corner.make<cv::Point2i>(),
+                        .radius = 3,
+                        .color  = kGreen,
+                    });
+                }
+            }
+            visual.draw_later(Canvas::Point {
+                .origin = bullseye.center.make<cv::Point2i>(),
+                .radius = 5,
+                .color  = kGreen,
+            });
+            visual.draw_later(Canvas::Text {
+                .content  = std::format("B: {:.3f}", bullseye.score),
+                .top_left = bullseye.center.make<cv::Point2i>(),
+                .color    = kGreen,
+            });
+        }
+        for (const auto& roi : result.areas) {
+            visual.draw_later(roi);
+        }
+        visual.draw_later(result.armors);
+        visual.draw_later(result.green_light);
+
+        armor2ds       = std::move(result.armors);
+        lightbar2ds    = std::move(result.lightbars);
+        rune_icons     = std::move(result.icons);
+        rune_bullseyes = std::move(result.bullseyes);
+
+        /// [] 位姿估计，目前只有前哨站的 Ekf 需要用这个来迭代，其他机器人的
+        ///    三维装甲板仅作可视化用途
+        auto armor3ds = Armor3ds { };
+        {
+            estimator.update_camera_transform(iso);
+
+            auto result = estimator.estimate_armor(armor2ds, image_mat);
+
+            const auto& addition = estimator.addition();
+            visual.draw_later(addition.detected_2d);
+            // visual.draw_later(addition.areas);
+            // visual.draw_later(addition.predicted_near);
+            // visual.draw_later(addition.predicted_away);
+
+            visual.publish(addition.origin, "origin_armors");
+            visual.publish(addition.detected_3d, "outpost_lightbars");
+            visual.publish({ addition.center_3d, Orientation::kIdentity() }, "outpost_center");
+
+            armor3ds = std::move(result);
+        }
+        visual.publish(armor3ds, "visible_armors");
+
+        /// [] 跟踪目标，跟踪器里面维护了可见机器人的 EKF 状态
+        auto trackable = Trackable::Unique { };
+        {
+            if (context.id != RobotId::UNKNOWN) {
+                tracker->update_track_color(
+                    (context.id.color() == RobotColor::RED) ? CampColor::BLUE : CampColor::RED);
+                // 哨兵自瞄常开，需要超时检测
+                tracker->update_aim_cleanup(
+                    context.id == RobotId::RED_SENTRY || context.id == RobotId::BLUE_SENTRY);
+            }
+            tracker->update_aim_intent(context.track_intent);
+            tracker->update_track_genre(context.track_ids);
+            tracker->update_camera(iso);
+
+            tracker->clean();
+            tracker->store(armor2ds);
+            tracker->store(armor3ds);
+            tracker->store(lightbar2ds);
+            tracker->store(rune_icons);
+            tracker->store(rune_bullseyes);
+
+            trackable = tracker->execute(image.timestamp());
+
+            const auto& addition = tracker->addition();
+            for (const auto& item : addition.tracked2d) {
+                visual.draw_later(Canvas::ArmorShape {
+                    .shape = item,
+                    .color = { 127, 127, 127 },
+                });
+            }
+            for (const auto& item : addition.lightbars) {
+                visual.draw_later(Canvas::Text {
+                    .content  = std::to_string(item.id),
+                    .top_left = item.point.make<cv::Point2i>(),
+                    .color    = kYellow,
+                });
+            }
+            for (const auto& item : addition.rune_features) {
+                visual.draw_later(Canvas::Point {
+                    .origin = item.point.make<cv::Point2i>(),
+                    .radius = 4,
+                    .color  = kYellow,
+                });
+            }
+            if (addition.rune_polygon) {
+                const auto& polygon = *addition.rune_polygon;
+                auto center         = Point2d { };
+                for (const auto& blade : polygon.blades) {
+                    center.x += blade.x;
+                    center.y += blade.y;
+                }
+                center.x /= static_cast<double>(polygon.blades.size());
+                center.y /= static_cast<double>(polygon.blades.size());
+
+                for (std::size_t index = 0; index < polygon.blades.size(); ++index) {
+                    const auto& begin = polygon.blades[index];
+                    const auto& end   = polygon.blades[(index + 1) % polygon.blades.size()];
+                    visual.draw_later(Canvas::Line {
+                        .begin = begin.make<cv::Point2i>(),
+                        .end   = end.make<cv::Point2i>(),
+                        .color = kYellow,
+                    });
+                }
+                visual.draw_later(Canvas::Line {
+                    .begin = polygon.icon.make<cv::Point2i>(),
+                    .end   = center.make<cv::Point2i>(),
+                    .color = kYellow,
+                });
+            }
+            for (const auto& info : addition.infos) {
+                if (auto p = estimator.make_point2d(info.point)) {
+                    visual.draw_later(Canvas::Text {
+                        .content  = info.text,
+                        .top_left = p->make<cv::Point2i>(),
+                    });
+                }
+            }
+            visual.publish(addition.tracked3d, "trackable");
+        }
+
+        /// [] 火控指令由 component 求解，这里仅同步可视化
+        if (addition.should_track) {
+            visual.update_aiming_direction(addition.aim_yaw, addition.aim_pitch);
+            visual.publish(addition.aim_yaw, "aim_yaw");
+            visual.publish(addition.aim_pitch, "aim_pitch");
+
+            if (const auto aim_2d = estimator.make_point2d(addition.attack)) {
+                const auto color = addition.should_shoot //
+                    ? (addition.pre_aim ? kOrange : kRed)
+                    : (addition.pre_aim ? kYellow : kGreen);
+                visual.draw_later(Canvas::Point {
+                    .origin = aim_2d->make<cv::Point2i>(),
+                    .radius = 5,
+                    .color  = color,
+                });
+
+                // 前馈投影：端点 = attack + ff×attack，对应目标的切向运动方向与快慢
+                const auto base    = addition.attack.make<Eigen::Vector3d>();
+                const auto vectors = std::array {
+                    std::pair { addition.ff_v, kCyan },
+                    std::pair { addition.ff_a, kMagenta },
+                };
+
+                for (const auto& [ff, ff_color] : vectors) {
+                    if (ff.norm() < 1e-6) continue;
+
+                    const auto endpoint = Point3d { base + ff.make<Eigen::Vector3d>().cross(base) };
+                    if (const auto end_2d = estimator.make_point2d(endpoint)) {
+                        visual.draw_later(Canvas::Line {
+                            .begin = aim_2d->make<cv::Point2i>(),
+                            .end   = end_2d->make<cv::Point2i>(),
+                            .color = ff_color,
+                        });
+                    }
+                }
+            }
+        }
+
+        const auto distance = trackable ? trackable->get_direction().norm() : 0.0;
+        std::apply([&](auto&&... drawable) { (visual.draw_later(drawable), ...); },
+            std::tuple {
+                Canvas::Text { std::format("{:.2f}m", distance), { 10, 600 }, kWhite },
+                Canvas::Text { "PREAIM", { 10, 620 }, addition.pre_aim ? kRed : kWhite },
+                Canvas::Text { "TRACK", { 10, 640 }, addition.should_track ? kRed : kWhite },
+                Canvas::Text { "SHOOT", { 10, 660 }, addition.should_shoot ? kRed : kWhite },
+                Canvas::Text { context.track_rune ? "RUNE" : "ARMOR", { 10, 700 }, kWhite },
+            });
+
+        if (trackable) {
+            std::lock_guard lock { self.command_mutex };
+            self.current_command.trackable = std::move(trackable);
+            self.unread_command.store(true, std::memory_order::release);
+        }
+    }
+};
+
+auto AutoAim::process(const Image& image) -> void { pimpl->process(image); }
+
+AutoAim::AutoAim() noexcept
+    : pimpl { std::make_unique<Impl>(*this) } { }
+
+AutoAim::~AutoAim() noexcept = default;

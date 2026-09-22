@@ -1,0 +1,34 @@
+log_level: Debug
+serial_frame_id: serial
+odom_frame_id: odom
+gimbal_fram_id: gimbal
+stamp_offset_sec: 0.0
+
+iceoryx_conf:
+  aim_command_topic:
+    service: aim_command
+    instance: tracker
+    event: data
+  gimbal_info_topic:
+    service: gimbal_info
+    instance: serial
+    event: data
+  enemy_color_topic:
+    service: enemy_color
+    instance: serial
+    event: data
+  task_mode_topic:
+    service: task_mode
+    instance: serial
+    event: data
+  bullet_id_topic:
+    service: bullet_id
+    instance: serial
+    event: data
+
+serial_conf:
+  device_name: /dev/ttyACM0
+  baudrate: 115200
+  stopbits: stopbits_one 
+  flowcontrol: flowcontrol_none 
+  parity: parity_none 

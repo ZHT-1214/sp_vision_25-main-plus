@@ -1,0 +1,86 @@
+use_sim: true
+
+orb:
+  nfeatures: 1500
+  scale_factor: 2.0
+  nlevels: 8
+  edge_threshold: 19
+  fast_threshold: 20
+  match_threshold: 20
+
+gcn2:
+  backend: tensorrt
+  model_path: /home/hy/paper_work/GCNv2_SLAM/GCN2/gcn2_640x480.onnx
+  input_width: 640
+  input_height: 480
+  border: 16
+  dist_thresh: 8
+  score_threshold: 0.05
+  nfeatures: 1500
+  match_threshold: 20
+  net_detector:
+    openvino:
+      device_name: CPU
+      infer_request_buffer_num: 5
+    tensorrt:
+      copy_context_num: 3
+      min_free_mem_ratio: 0.1
+      use_cuda_preproces: false
+
+camera: 
+  type: hik
+  hik_camera:
+    target_sn: DA1094115
+    adc_bit_depth: Bits_8
+    pixel_format: BayerRG8 #RGB8Packed
+    reverse_x: false
+    reverse_y: false
+    width: 1440
+    height: 1080
+    offset_x: 0
+    offset_y: 0
+    acquisition_frame_rate_enable: true
+    acquisition_frame_rate: 60
+    exposure_time: 3500
+    gain: 10.9
+    gamma: 0.7 #Bayer用不了
+    trigger_mode: Off
+    trigger_source: ""
+    trigger_activation: ""
+    format: "gray" 
+    use_cuda_cvt: true
+  uvc_camera:
+    device_name: "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:4:1.0-video-index0"
+    fps: 60
+    width: 1280
+    height: 720
+    exposure: 50
+    gain: 10.0
+    gamma: 100
+  camera_info:
+    image_width: 1440
+    image_height: 1080
+    camera_name: narrow_stereo
+    camera_matrix:
+      rows: 3
+      cols: 3
+      data: [1812.55793,    0.     ,  734.91798,
+                0.     , 1810.46711,  531.77493,
+                0.     ,    0.     ,    1.     ]
+    distortion_model: plumb_bob
+    distortion_coefficients:
+      rows: 1
+      cols: 5
+      data: [-0.068720, 0.117810, 0.000829, 0.000523, 0.000000]
+    rectification_matrix:
+      rows: 3
+      cols: 3
+      data: [1., 0., 0.,
+            0., 1., 0.,
+            0., 0., 1.]
+    projection_matrix:
+      rows: 3
+      cols: 4
+      data: [1798.04639,    0.     ,  735.53338,    0.     ,
+                0.     , 1801.03183,  532.11558,    0.     ,
+                0.     ,    0.     ,    1.     ,    0.     ]

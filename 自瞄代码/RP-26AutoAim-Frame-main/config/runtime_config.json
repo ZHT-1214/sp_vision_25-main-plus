@@ -1,0 +1,31 @@
+{
+    "visualize": 0,
+    "loading_plugin_list": "plugins",
+    "plugins": [
+        {
+            "name": "ReceiveDecoder",
+            "library": "libreceive_decoder_plugin_lib.so"
+        },
+        {
+            "name": "CameraManager",
+            "library": "libsingle_camera_manager_plugin_lib.so"
+        },
+        {
+            "name": "NNDetector",
+            "library": "libNNdetect_lib.so"
+        },
+        {
+            "name": "TrackerManager",
+            "library": "libtracker_manager_plugin_lib.so"
+        },
+        {
+            "name": "PlannerControl",
+            "library": "libfire_control_system_plugin_lib.so"
+        },
+        {
+            "name": "SendEncoder",
+            "library": "libsend_encoder_plugin_lib.so",
+            "AttachTo": "PlannerControl"
+        }
+    ]
+}

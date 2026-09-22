@@ -1,0 +1,54 @@
+target("buff_detector")
+set_kind("binary")
+add_includedirs("buff_detector/include")
+add_files("buff_detector/src/*.cpp")
+add_packages("eigen")
+add_packages("opencv")
+add_packages("yaml-cpp")
+add_packages("reflect-cpp")
+add_packages("cxxopts")
+add_packages("quill")
+add_deps("common_defs")
+add_deps("tools")
+add_rules("iceoryx_deps")
+add_rules("openvino_deps")
+target_end()
+
+target("buff_tracker")
+set_kind("binary")
+add_includedirs("buff_tracker/include")
+add_files("buff_tracker/src/*.cpp")
+add_packages("eigen")
+add_packages("opencv")
+add_packages("yaml-cpp")
+add_packages("reflect-cpp")
+add_packages("cxxopts")
+add_packages("quill")
+add_packages("ceres")
+-- /usr/local/lib provides static libceres.a on this machine; Ceres transitive
+-- deps are not propagated by xmake's package metadata, so append a final
+-- explicit link group.
+add_ldflags(
+	"-Wl,--start-group",
+	"-lceres",
+	"-lglog",
+	"-lgflags",
+	"-lspqr",
+	"-lcholmod",
+	"-lccolamd",
+	"-lcamd",
+	"-lcolamd",
+	"-lamd",
+	"-lsuitesparseconfig",
+	"-lrt",
+	"-llapack",
+	"-lblas",
+	"-lf77blas",
+	"-latlas",
+	"-Wl,--end-group"
+)
+add_deps("common_defs")
+add_deps("tools")
+add_rules("iceoryx_deps")
+add_rules("gtsam_deps")
+target_end()

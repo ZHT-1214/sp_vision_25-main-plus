@@ -1,0 +1,99 @@
+####附加
+pattern_cols: 11
+pattern_rows: 8
+square_size: 30  # 棋盘格每个格子的边长(mm)
+
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
+
+enemy_color: "red"
+# enemy_color: "blue"
+
+#####-----神经网络参数-----#####
+yolo_name: yolov5
+classify_model: assets/tiny_resnet.onnx
+yolo11_model_path: assets/yolo11.xml
+yolov8_model_path: assets/yolov8.xml
+yolov5_model_path: assets/yolov5.xml
+device: CPU
+min_confidence: 0.8
+use_traditional: false
+
+#####-----ROI-----#####
+roi: 
+  x: 500
+  y: 400
+  width: 500
+  height: 500
+
+use_roi: false
+
+#####-----传统方法参数-----#####
+threshold: 150
+max_angle_error: 45 # degree
+min_lightbar_ratio: 1.5
+max_lightbar_ratio: 20
+min_lightbar_length: 8
+min_armor_ratio: 1
+max_armor_ratio: 5
+max_side_ratio: 1.5
+max_rectangular_error: 25 # degree
+min_confidence: 0.8
+
+#####-----tracker参数-----#####
+min_detect_count: 5
+max_temp_lost_count: 15
+outpost_max_temp_lost_count: 75
+
+#####-----aimer参数-----#####
+yaw_offset: 1.5 # degree
+pitch_offset: -0.5 # degree
+comming_angle: 60 # degree
+leaving_angle: 20 # degree
+decision_speed: 7 # rad/s
+high_speed_delay_time: 0.050 # s
+low_speed_delay_time: 0.015 # s
+
+#####-----shooter参数-----#####
+first_tolerance: 100 # 近距离射击容差，degree
+second_tolerance: 100 # 远距离射击容差，degree
+judge_distance: 2 #距离判断阈值
+auto_fire: true # 是否由自瞄控制射击
+
+# camera_name: "hikrobot"
+# exposure_ms: 2
+# gain: 16
+# vid_pid: "2bdf:0001"
+camera_name: "mindvision"
+exposure_ms: 8
+gamma: 0.6
+vid_pid: "f622:d13a"
+
+
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+
+# 重投影误差: 0.1763px
+# camera_matrix: [1583.4105029380969, 0, 571.32915077836662, 0, 1589.2322825018146, 432.5421015233681, 0, 0, 1]
+# distort_coeffs: [-0.21104348736758416, 0.15546969442252626, -0.0034405408402223663, -9.8055514716525013e-05, 0]
+
+# 重投影误差: 0.2067px
+# camera_matrix: [1562.4635414167549, 0, 578.15140046840486, 0, 1562.595778765789, 494.95078544366817, 0, 0, 1]
+# distort_coeffs: [-0.21399918148258604, 0.18393024001645836, -0.0008815656280448923, 0.00029084693868837707, 0]
+# camera_matrix: [1512.6827512462769, 0, 602.73731835924286, 0, 1513.8132532429572, 482.69819254295896, 0, 0, 1]
+# distort_coeffs: [-0.20687468668351566, 0.11035708729222632, -0.001055189645856276, 0.00084399327544947781, 0]
+camera_matrix: [1559.0842855074932, 0, 604.88629474429763, 0, 1558.8167461517098, 491.53961826585481, 0, 0, 1]
+distort_coeffs: [-0.19929372439193949, 0.17299390457154543, 0.00017253696527652415, 0.00040402734352460806, 0]
+#####-----cboard参数-----#####
+quaternion_canid: 0x100
+bullet_speed_canid: 0x101
+send_canid: 0xff
+can_interface: "can0"
+
+#####-----gimbal参数-----#####
+com_port: "/dev/gimbal"
+
+#####-----buff_detector参数-----#####
+model: "assets/yolo11_buff_int8.xml"
+
+#####-----buff_aimer参数-----#####
+fire_gap_time: 0.520   # s
+predict_time: 0.100     # s

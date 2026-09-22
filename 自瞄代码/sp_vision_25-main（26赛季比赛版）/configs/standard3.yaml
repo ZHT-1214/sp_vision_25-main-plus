@@ -1,0 +1,123 @@
+enemy_color: "red"
+# enemy_color: "blue"
+
+#####-----神经网络参数-----#####
+yolo_name: yolov5
+classify_model: assets/tiny_resnet.onnx
+yolo11_model_path: assets/yolo11.xml
+yolov8_model_path: assets/yolov8.xml
+yolov5_model_path: assets/yolov5.xml
+device: CPU
+min_confidence: 0.8
+use_traditional: true
+
+#####-----ROI-----#####
+roi: 
+  x: 420
+  y: 50
+  width: 600
+  height: 600
+
+use_roi: false
+
+#####-----传统方法参数-----#####
+threshold: 150
+max_angle_error: 45 # degree
+min_lightbar_ratio: 1.5
+max_lightbar_ratio: 20
+min_lightbar_length: 8
+min_armor_ratio: 1
+max_armor_ratio: 5
+max_side_ratio: 1.5
+max_rectangular_error: 25 # degree
+
+#####-----tracker参数-----#####
+min_detect_count: 5
+max_temp_lost_count: 15
+outpost_max_temp_lost_count: 75
+
+#####-----aimer参数-----#####
+# yaw_offset: -13 # degree -2.5左正右负
+# pitch_offset: -5.5 # degree 2下正上负
+yaw_offset: 0 # degree -2.5左正右负
+pitch_offset: -2 # degree 2下正上负
+comming_angle: 55 # degree
+leaving_angle: 20 # degree
+decision_speed: 7 # rad/s
+high_speed_delay_time: 0.01 # s//高速目标需要 更大的提前量更远的预测距离
+low_speed_delay_time: 0.01 # s//应该相对较小因为低速目标变化较慢 
+
+#####-----shooter参数-----#####
+first_tolerance: 3 # 近距离射击容差，degree
+second_tolerance: 2 # 远距离射击容差，degree
+judge_distance: 2 #距离判断阈值
+auto_fire: true # 是否由自瞄控制射击
+   
+camera_name: "mindvision"
+exposure_ms: 3
+# gain: 16.9
+gamma: 0.5
+vid_pid: "2bdf:0001"
+
+#  1  0  0
+#  0  1  0
+#  0  0  1
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+
+# # # 重投影误差: 0.1131px
+camera_matrix: [1559.0842855074932, 0, 604.88629474429763, 0, 1558.8167461517098, 491.53961826585481, 0, 0, 1]
+distort_coeffs: [-0.19929372439193949, 0.17299390457154543, 0.00017253696527652415, 0.00040402734352460806, 0]
+#  重投影误差: 0.1763px
+# camera_matrix: [1583.4105029380969, 0, 571.32915077836662, 0, 1589.2322825018146, 432.5421015233681, 0, 0, 1]
+# distort_coeffs: [-0.21104348736758416, 0.15546969442252626, -0.0034405408402223663, -9.8055514716525013e-05, 0]
+# 重投影误差: 0.2067px
+# camera_matrix: [1562.4635414167549, 0, 578.15140046840486, 0, 1562.595778765789, 494.95078544366817, 0, 0, 1]
+# distort_coeffs: [-0.21399918148258604, 0.18393024001645836, -0.0008815656280448923, 0.00029084693868837707, 0]
+
+
+# # 相机同理想情况的偏角: yaw-1.20 pitch1.80 roll1.09 degree
+# # 标定板到世界坐标系原点的水平距离: 2.30 m
+# # 标定板同竖直摆放时的偏角: yaw44.82 pitch3.87 roll-89.34 degree
+# R_camera2gimbal: [0.021471867641391053, 0.031053494513470486, 0.99928706555148217, -0.99958762010064084, 0.019728955484579272, 0.020865235609119345, -0.019066951553070862, -0.99932299522926493, 0.031464306197396041]
+# t_camera2gimbal: [-0.000636016344589099, -0.00070933880075756768, 0.10093752505377149]
+# 相机同理想情况的偏角: yaw-0.09 pitch2.66 roll2.99 degree
+# 标定板到世界坐标系原点的水平距离: 1.35 m
+# 标定板同竖直摆放时的偏角: yaw-33.79 pitch1.34 roll0.28 degree
+R_camera2gimbal: [0.0039337878013309064, 0.04626389572262235, 0.99892150705953908, -0.99863265535223866, 0.052254491435091262, 0.0015125438827432746, -0.052128159162504045, -0.99756158711000242, 0.046406195113393528]
+t_camera2gimbal: [0.0026360531656800675, 0.0092962002092896647, 0.514766908033416]
+# 相机同理想情况的偏角: yaw0.80 pitch2.51 roll3.49 degree
+# 标定板到世界坐标系原点的水平距离: 1.10 m
+# 标定板同竖直摆放时的偏角: yaw-107.02 pitch5.78 roll1.83 degree
+# R_camera2gimbal: [-0.01120415350864595, 0.044546110246122428, 0.99894449846129862, -0.99808588249861951, 0.060264941846601895, -0.013881928582780863, -0.060819718028830273, -0.99718793657272375, 0.043785626097243013]
+# t_camera2gimbal: [-0.28542219258233931, 0.018463319776202206, 0.40020492719437781]
+
+#####-----cboard参数-----#####
+quaternion_canid: 0x100
+bullet_speed_canid: 0x101
+send_canid: 0xff
+can_interface: "can0"
+
+#####-----gimbal参数-----#####
+com_port: "/dev/ttyACM0"
+yaw_kp: 0
+yaw_kd: 0
+pitch_kp: 0
+pitch_kd: 0
+
+#####-----planner-----#####
+fire_thresh: 0.001
+
+max_yaw_acc: 70
+Q_yaw: [5e6, 0]
+R_yaw: [1]
+
+max_pitch_acc: 50
+Q_pitch: [9e6, 0]
+R_pitch: [1]
+
+#####-----buff_detector参数-----#####
+model: "assets/yolo11_buff_int8.xml"
+
+#####-----buff_aimer参数-----#####
+fire_gap_time: 0.700   # s
+predict_time: 0.120     # s

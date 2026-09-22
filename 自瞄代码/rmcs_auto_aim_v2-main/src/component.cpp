@@ -1,0 +1,370 @@
+#include "kernel/auto_aim.hpp"
+#include "kernel/fire_control.hpp"
+#include "utility/rclcpp/node.hpp"
+
+#include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <thread>
+
+#include <eigen3/Eigen/Geometry>
+#include <rmcs_executor/component.hpp>
+#include <rmcs_msgs/camera_frame.hpp>
+#include <rmcs_msgs/mouse.hpp>
+#include <rmcs_msgs/rmcs_msgs.hpp>
+#include <rmcs_msgs/robot_id.hpp>
+#include <rmcs_msgs/switch.hpp>
+
+namespace rmcs {
+
+using namespace rmcs::util;
+using namespace rmcs::kernel;
+
+class AutoAimComponent final : public rmcs_executor::Component {
+    static inline const auto kTNaN = Eigen::Vector3d { kNaN, kNaN, kNaN };
+
+private:
+    AutoAim auto_aim { };
+    RclcppNode rclcpp { get_component_name() };
+
+    std::unique_ptr<FireController> fire;
+
+    bool manual_shoot = false;
+    bool enable_rune  = false;
+
+    DeviceIds track_ids = DeviceIds::Full();
+
+    std::optional<rmcs_msgs::RobotId> dangerous_fallback { };
+
+    struct GimbalState {
+        Timestamp timestamp;
+
+        Eigen::Quaterniond orientation = Eigen::Quaterniond::Identity();
+        Eigen::Vector3d gyro_body      = Eigen::Vector3d::Zero();
+    } gimbal;
+    std::mutex gimbal_mutex;
+
+    EventInputInterface<std::shared_ptr<const rmcs_msgs::CameraFrame>> camera_frame {
+        [this](const std::shared_ptr<const rmcs_msgs::CameraFrame>& frame) {
+            if (!frame || camera_frame_stop_requested.load(std::memory_order::relaxed)) return;
+
+            latest_camera_frame.store(frame, std::memory_order::release);
+            camera_frame_event_count.fetch_add(1, std::memory_order::release);
+            camera_frame_event_count.notify_one();
+        },
+    };
+
+    std::atomic<std::shared_ptr<const rmcs_msgs::CameraFrame>> latest_camera_frame { nullptr };
+    std::atomic<std::uint32_t> camera_frame_event_count { 0 };
+    std::atomic<bool> camera_frame_stop_requested { false };
+    std::jthread camera_frame_worker { [this](const std::stop_token& stop) {
+        while (!stop.stop_requested()
+            && !camera_frame_stop_requested.load(std::memory_order::relaxed)) {
+            if (auto frame = latest_camera_frame.exchange(nullptr, std::memory_order::acq_rel)) {
+                {
+                    std::lock_guard lock { gimbal_mutex };
+                    gimbal.orientation = frame->imu_snapshot;
+                    gimbal.gyro_body   = frame->gyro_body;
+                    gimbal.timestamp   = frame->exposure_timestamp;
+                }
+                auto_aim.process(Image { std::move(frame) });
+                continue;
+            }
+
+            const auto old = camera_frame_event_count.load(std::memory_order::relaxed);
+            if (!latest_camera_frame.load(std::memory_order::acquire) && !stop.stop_requested()
+                && !camera_frame_stop_requested.load(std::memory_order::relaxed)) {
+                camera_frame_event_count.wait(old, std::memory_order::acquire);
+            }
+        }
+    } };
+
+    struct SimpleComponent : public rmcs_executor::Component {
+        auto update() -> void override { }
+    };
+    std::shared_ptr<SimpleComponent> context_component =
+        create_partner_component<SimpleComponent>(get_component_name() + "_context");
+
+    InputInterface<bool> navigation_rune_request;
+    InputInterface<bool> navigation_track_building_only;
+
+    InputInterface<rmcs_msgs::RobotId> robot_id;
+    InputInterface<rmcs_msgs::Switch> rswitch;
+    InputInterface<rmcs_msgs::Switch> lswitch;
+    InputInterface<rmcs_msgs::Mouse> mouse;
+    InputInterface<rmcs_msgs::Keyboard> keyboard;
+
+    rmcs_msgs::Switch last_rswitch    = rmcs_msgs::Switch::UNKNOWN;
+    rmcs_msgs::Keyboard last_keyboard = rmcs_msgs::Keyboard::zero();
+
+    OutputInterface<bool> should_track;
+    OutputInterface<bool> should_shoot;
+    OutputInterface<bool> single_shoot;
+    OutputInterface<Eigen::Vector3d> track_target;
+    OutputInterface<Eigen::Vector3d> robot_center;
+    OutputInterface<Eigen::Vector3d> ff_v;
+    OutputInterface<Eigen::Vector3d> ff_a;
+
+    double max_yaw_acc = 100.;
+    double max_yaw_vel = 3.;
+
+    Timestamp last_yaw_vel_timestamp;
+    double last_yaw_velocity = kNaN;
+
+    Trackable::Unique current_trackable { };
+
+public:
+    AutoAimComponent() {
+        context_component->register_input(
+            "/rmcs_navigation/request/track_rune", navigation_rune_request, false);
+        context_component->register_input(
+            "/rmcs_navigation/track_building_only", navigation_track_building_only, false);
+
+        context_component->register_input("/gimbal/auto_aim/camera_frame", camera_frame, false);
+        context_component->register_input("/referee/id", robot_id, false);
+        context_component->register_input("/remote/switch/right", rswitch, false);
+        context_component->register_input("/remote/switch/left", lswitch, false);
+        context_component->register_input("/remote/mouse", mouse, false);
+        context_component->register_input("/remote/keyboard", keyboard, false);
+
+        register_output("/auto_aim/should_control", should_track, false);
+        register_output("/auto_aim/should_shoot", should_shoot, false);
+        register_output("/auto_aim/single_shoot", single_shoot, false);
+        register_output("/auto_aim/control_direction", track_target, kTNaN);
+        register_output("/auto_aim/robot_center", robot_center, kTNaN);
+        register_output("/auto_aim/ff_a", ff_a, Eigen::Vector3d::Zero());
+        register_output("/auto_aim/ff_v", ff_v, Eigen::Vector3d::Zero());
+
+        const auto& params = rclcpp.params();
+
+        manual_shoot = params.get_bool("manual_shoot");
+        if (params.contains("enable_rune")) {
+            enable_rune = params.get_bool("enable_rune");
+        }
+        if (params.contains("default_attack_rune")) {
+            auto_aim.with_context([&](AutoAim::Context& ctx) {
+                ctx.track_rune = params.get_bool("default_attack_rune");
+            });
+        }
+
+        /// WARN: 危险回退！仅供裁判系统缺席时调试使用。
+        /// 生效后机器人身份将被强行绑定为对应阵营哨兵，
+        /// 直接影响敌我识别与检测颜色，严禁比赛时启用。
+        if (params.contains("dangerous_fallback")) {
+            auto value = params.get_string("dangerous_fallback");
+            std::ranges::transform(value, value.begin(), ::tolower);
+            using namespace rmcs_msgs;
+            if (value == "red") {
+                dangerous_fallback = RobotId::RED_SENTRY;
+            }
+            if (value == "blue") {
+                dangerous_fallback = RobotId::BLUE_SENTRY;
+            }
+
+            if (!value.empty() && !dangerous_fallback) {
+                rclcpp.warn("dangerous_fallback '{}' 无法识别，已忽略", value);
+            } else if (dangerous_fallback) {
+                rclcpp.warn("注意，RobotId 已 Fallback 为 {}", *dangerous_fallback);
+            }
+        }
+
+        /// 跟踪目标兵种白名单，缺省默认 FULL（全部兵种）
+        /// 可选兵种名或 FULL
+        if (params.contains("track_ids")) {
+            auto resolved = DeviceIds::None();
+            for (auto value : params.get<std::vector<std::string>>("track_ids")) {
+                std::ranges::transform(value, value.begin(), ::toupper);
+                if (value == "FULL") {
+                    resolved = DeviceIds::Full();
+                    rclcpp.info("Track All Robots");
+                    break;
+                }
+                if (const auto id = from_string(value); id != DeviceId::UNKNOWN) {
+                    resolved.append(id);
+                } else {
+                    rclcpp.warn("track_ids '{}' 无法识别，已忽略", value);
+                }
+            }
+            track_ids = resolved;
+        }
+
+        rclcpp.info("Track Ids:");
+        for (auto item : track_ids.items()) {
+            rclcpp.info("  - {}", to_string(item));
+        }
+
+        if (auto config = util::serialize<FireController::Config>("fire_control", params)) {
+            fire = std::make_unique<FireController>(*config);
+        } else {
+            throw std::runtime_error { config.error() };
+        }
+
+        const auto t = params.get<std::vector<double>>("camera_translation");
+        if (t.size() == 3) {
+            auto_aim.with_context([&](AutoAim::Context& ctx) {
+                ctx.camera_translation = Translation { t[0], t[1], t[2] };
+            });
+        } else {
+            rclcpp.error("Parameter 'camera_translation' expects 3 elements, got {}", t.size());
+        }
+    }
+
+    ~AutoAimComponent() override {
+        camera_frame_stop_requested.store(true, std::memory_order::relaxed);
+        camera_frame_worker.request_stop();
+        camera_frame_event_count.fetch_add(1, std::memory_order::release);
+        camera_frame_event_count.notify_one();
+    }
+
+    auto before_updating() -> void override {
+        using namespace rmcs_msgs;
+        if (!robot_id.ready()) {
+            robot_id.make_and_bind_directly(
+                dangerous_fallback.value_or(RobotId { RobotId::UNKNOWN }));
+        }
+    }
+
+    auto update() -> void override {
+        auto gimbal_q    = Eigen::Quaterniond { };
+        auto gimbal_gyro = Eigen::Vector3d { };
+        auto gimbal_time = Timestamp { };
+        {
+            std::lock_guard lock { gimbal_mutex };
+            gimbal_q    = gimbal.orientation;
+            gimbal_gyro = gimbal.gyro_body;
+            gimbal_time = gimbal.timestamp;
+        }
+
+        // 求最大角加速度和角速度
+        if (gimbal_time != Timestamp { } && gimbal_time != last_yaw_vel_timestamp) {
+            const auto velocity = (gimbal_q * gimbal_gyro).z();
+            if (std::isfinite(velocity)) {
+                max_yaw_vel = std::max(max_yaw_vel, std::abs(velocity));
+                if (std::isfinite(last_yaw_velocity)) {
+                    const auto dt =
+                        std::chrono::duration<double>(gimbal_time - last_yaw_vel_timestamp).count();
+                    if (dt > 1e-6) {
+                        max_yaw_acc =
+                            std::max(max_yaw_acc, std::abs((velocity - last_yaw_velocity) / dt));
+                    }
+                }
+                last_yaw_vel_timestamp = gimbal_time;
+                last_yaw_velocity      = velocity;
+            }
+        }
+
+        using namespace rmcs_msgs;
+        const auto rune_switch_rising =
+            rswitch.ready() && last_rswitch == Switch::UP && *rswitch == Switch::MIDDLE;
+        if (rswitch.ready()) {
+            last_rswitch = *rswitch;
+        }
+
+        auto pressed_rune_mode = false;
+        auto release_rune_mode = false;
+        if (keyboard.ready()) {
+            pressed_rune_mode = keyboard->f && !last_keyboard.f;
+            release_rune_mode = !keyboard->f && last_keyboard.f;
+
+            last_keyboard = *keyboard;
+        }
+
+        const auto track_intent =
+            (mouse.ready() && mouse->right) || (rswitch.ready() && *rswitch == Switch::UP);
+        const auto shoot_intent =
+            (mouse.ready() && mouse->left) || (lswitch.ready() && *lswitch == Switch::DOWN);
+
+        auto_aim.with_context([=, this](AutoAim::Context& ctx) {
+            ctx.track_intent = track_intent;
+            if (enable_rune) {
+                if (navigation_rune_request.ready()) {
+                    ctx.track_rune = *navigation_rune_request;
+                }
+                if (rune_switch_rising) {
+                    ctx.track_rune = !ctx.track_rune;
+                }
+                if (pressed_rune_mode) ctx.track_rune = true;
+                if (release_rune_mode) ctx.track_rune = false;
+            } else {
+                ctx.track_rune = false;
+            }
+            *single_shoot = ctx.track_rune;
+
+            ctx.max_yaw_vel = std::max(max_yaw_vel, ctx.max_yaw_vel);
+            ctx.max_yaw_acc = std::max(max_yaw_acc, ctx.max_yaw_acc);
+
+            ctx.id = *robot_id;
+
+            const auto track_building =
+                navigation_track_building_only.ready() && *navigation_track_building_only;
+            ctx.track_ids =
+                track_building ? DeviceIds { DeviceId::BASE, DeviceId::OUTPOST } : track_ids;
+        });
+
+        if (auto_aim.command_updated()) {
+            auto_aim.with_command([this](const AutoAim::Command& cmd) {
+                if (cmd.trackable) {
+                    current_trackable = cmd.trackable->clone();
+                }
+            });
+        }
+
+        const auto now = Clock::now();
+        using namespace std::chrono_literals;
+
+        if (current_trackable && now - current_trackable->get_timestamp() > 100ms) {
+            current_trackable.reset();
+
+            *should_track = false;
+            *should_shoot = false;
+            *track_target = kTNaN;
+            *robot_center = kTNaN;
+
+            auto_aim.with_context([](AutoAim::Context& ctx) { ctx.addition = { }; });
+        }
+
+        if (current_trackable) {
+            const auto dir = gimbal_q * Eigen::Vector3d::UnitX();
+            fire->update({
+                .timestamp   = now,
+                .yaw         = std::atan2(+dir.y(), dir.x()),
+                .pitch       = std::atan2(-dir.z(), std::hypot(dir.x(), dir.y())),
+                .max_yaw_vel = max_yaw_vel,
+                .max_yaw_acc = max_yaw_acc,
+            });
+
+            if (auto aimed = fire->aim(*current_trackable)) {
+                *should_track = true;
+                *should_shoot = manual_shoot ? (aimed->shoot && shoot_intent) : aimed->shoot;
+
+                *robot_center = aimed->center.make<Eigen::Vector3d>();
+                *track_target = aimed->target.make<Eigen::Vector3d>();
+
+                *ff_a = aimed->target.ff_a.make<Eigen::Vector3d>();
+                *ff_v = aimed->target.ff_v.make<Eigen::Vector3d>();
+
+                auto_aim.with_context([&](AutoAim::Context& ctx) {
+                    auto& addition = ctx.addition;
+
+                    addition.attack       = aimed->attack;
+                    addition.aim_yaw      = aimed->aim_yaw;
+                    addition.aim_pitch    = aimed->pitch;
+                    addition.pre_aim      = aimed->pre_aim;
+                    addition.should_track = true;
+                    addition.should_shoot = aimed->shoot;
+                    addition.ff_v         = aimed->target.ff_v;
+                    addition.ff_a         = aimed->target.ff_a;
+                });
+            }
+        }
+    }
+};
+
+} // namespace rmcs
+
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(rmcs::AutoAimComponent, rmcs_executor::Component)

@@ -1,0 +1,26 @@
+include "Time.fbs";
+
+namespace foxglove;
+
+table CarData {
+    mode: uint8;
+
+    my_color: uint8;
+
+    yaw: float;
+    pitch: float;
+    roll: float;
+
+    back_yaw: uint16;
+    my_blood: uint8;
+    v_yaw: float;
+    v_pitch: float;
+
+    yaw_offset: int8;
+    pitch_offset: int8;
+
+    bullet_speed: float;
+    dune: uint8;
+}
+
+root_type CarData;
