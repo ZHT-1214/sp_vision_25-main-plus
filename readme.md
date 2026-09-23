@@ -15,7 +15,7 @@
 -  部分实验效果如下：[![点击观看视频](https://i0.hdslb.com/bfs/archive/8b7fe064c2d6c53ec23bfd4cdc6a16de36c7966a.jpg)](https://www.bilibili.com/video/BV12zht6MEp3/?p=3)
 
 -  但当前项目仍有改进方向，如同步多个时间戳（除了软件层面，还有硬件层面），引入车辆自生的运动模型对预瞄点进行补偿，实现边走边打等等（详见第9点），后续需要新队员逐步进行改进。
-   
+-  开源地址：https://github.com/ZHT-1214/sp_vision_25-main-plus.git
 ## 1. 项目基础功能
 
 本项目负责 RoboMaster 机器人视觉自瞄侧的完整流程：
